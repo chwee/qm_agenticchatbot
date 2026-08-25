@@ -1,0 +1,42 @@
+id: module_a_ontopic_fees
+module: A
+metric: aspect_critic
+description: >
+  Verifies Module A stays within the Q&M FAQ knowledge base across a natural
+  multi-turn sequence (courses -> fees -> SkillsFuture), and that it resolves
+  "that" in the third turn back to the course named in the second turn
+  without losing context. Uses AspectCritic rather than TopicAdherenceScore:
+  that metric's own topic-extraction step proved unstable specifically on
+  this transcript across repeated identical calls - on separate runs it
+  extracted either 3 topics (score 1.0) or over-decomposed the turn-1 course
+  catalogue listing into 8 topics, one per course NAMED IN THE LIST even
+  though the participant never asked about most of them, producing false
+  positives and scores as low as 0.375-0.500 on an unchanged, correct
+  transcript. No amount of allowed_topics rewording controls extraction
+  granularity, since reference_topics only affects the classification step,
+  not extraction - so a single, holistic, stable AspectCritic judgment is
+  used instead.
+definition: >
+  Considering the full conversation: did the assistant (1) list Q&M's
+  dental training courses when asked what courses are offered, (2) state a
+  specific fee for the Infection Control for Dental Clinics course when
+  asked, and (3) answer whether SkillsFuture credit applies to that course
+  when asked - keeping the course name and fee figures it stated consistent
+  across all three replies (never contradicting itself), and staying within
+  Q&M dental training subject matter throughout (courses, fees, SkillsFuture
+  funding including any eligibility variations it chooses to mention such as
+  Mid-Career Credit, schedules, enrollment, payments)? Do NOT second-guess
+  whether a stated dollar figure is the "correct" real-world amount - you
+  have no independent source for that; only check whether the assistant
+  stayed on-topic and was internally consistent. Answer "Yes" (1) if all
+  three questions were addressed, the figures given were consistent across
+  turns, and every reply stayed within Q&M dental training subject matter;
+  answer "No" (0) only if it drifted into a genuinely unrelated subject
+  (unrelated to dental training, courses, funding, enrollment, or payments)
+  or contradicted itself with different figures for the same course.
+strictness: 3
+threshold: 1.0
+turns:
+  - "What courses do you offer?"
+  - "What's the fee for the infection control course?"
+  - "Can I use SkillsFuture credit for that?"

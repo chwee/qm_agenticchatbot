@@ -1,0 +1,33 @@
+# Local PostgreSQL for the Q&M AI Enquiry & Enrollment System.
+# Brings up a self-contained Postgres instance; the backend connects to it.
+#
+#   docker compose up -d        # start
+#   docker compose down         # stop (keeps data volume)
+#   docker compose down -v      # stop + wipe data
+#
+# The schema in backend/db/schema.sql is auto-applied on first boot via the
+# docker-entrypoint-initdb.d mount.
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: qm_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: qm_user
+      POSTGRES_PASSWORD: qm_password
+      POSTGRES_DB: qm_enrollment
+    ports:
+      - "5432:5432"
+    volumes:
+      - qm_pgdata:/var/lib/postgresql/data
+      - ./backend/db/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+      - ./backend/db/seed.sql:/docker-entrypoint-initdb.d/02_seed.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U qm_user -d qm_enrollment"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  qm_pgdata:

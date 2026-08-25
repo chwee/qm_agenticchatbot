@@ -1,0 +1,28 @@
+# ── Python ────────────────────────────────────────────────
+backend/.venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+
+# ── Node / WhatsApp server ────────────────────────────────
+whatsapp-server/node_modules/
+whatsapp-server/.wwebjs_auth/
+whatsapp-server/.wwebjs_cache/
+
+# ── Secrets / env ─────────────────────────────────────────
+.env
+*/.env
+!*/.env.example
+
+# ── Local, per-machine dev tooling config (not shared project config) ─────
+.claude/settings.local.json
+
+# ── Generated artefacts ───────────────────────────────────
+backend/generated/
+backend/logs/*.txt
+*.log
+
+# ── Ragas eval harness (generated reports only — code is tracked) ─────────
+backend/evals/reports/

@@ -1,0 +1,584 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Flow — Course &amp; Schedule Enquiry (Module A)</title>
+<style>
+  :root {
+    --paper: #F5F2EA;
+    --card: #FFFFFF;
+    --card-alt: #FBF9F3;
+    --ink: #1E2430;
+    --ink-dim: #5B6270;
+    --line: #DED7C4;
+    --line-strong: #C9C0A8;
+
+    --gateway: #1F7A5C;   --gateway-bg: rgba(31,122,92,0.09);
+    --backend: #35478C;   --backend-bg: rgba(53,71,140,0.08);
+    --db: #7C4A9E;        --db-bg: rgba(124,74,158,0.08);
+    --ext: #8A6A2F;       --ext-bg: rgba(150,121,74,0.10);
+    --decision: #A3432E;  --decision-bg: rgba(163,67,46,0.08);
+
+    --font-display: -apple-system, BlinkMacSystemFont, "Segoe UI Semibold", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    --font-mono: ui-monospace, "Cascadia Code", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #12151B; --card: #181C24; --card-alt: #1E2330;
+      --ink: #E9E6DC; --ink-dim: #9CA0AC;
+      --line: #2B303C; --line-strong: #3A4050;
+      --gateway: #46CB9B; --gateway-bg: rgba(70,203,155,0.10);
+      --backend: #93A2F2; --backend-bg: rgba(147,162,242,0.10);
+      --db: #D19DF0; --db-bg: rgba(209,157,240,0.10);
+      --ext: #E4C27E; --ext-bg: rgba(228,194,126,0.10);
+      --decision: #E28870; --decision-bg: rgba(226,136,112,0.10);
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--font-body); -webkit-font-smoothing: antialiased; }
+  .page { max-width: 980px; margin: 0 auto; padding: 48px 24px 90px; }
+
+  .eyebrow { font-family: var(--font-mono); font-size: .72rem; letter-spacing: .16em; text-transform: uppercase; color: var(--backend); margin: 0 0 10px; }
+  h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(1.5rem, 1.1rem + 1.6vw, 2.05rem); letter-spacing: -0.01em; line-height: 1.15; text-wrap: balance; margin: 0 0 14px; }
+  .dek { font-size: .98rem; line-height: 1.6; color: var(--ink-dim); max-width: 68ch; margin: 0 0 22px; }
+  .dek code, p code, li code, td code { font-family: var(--font-mono); font-size: .87em; color: var(--ink); background: var(--card-alt); border: 1px solid var(--line); border-radius: 3px; padding: 1px 5px; }
+
+  .sample-box { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 30px; }
+  .sample {
+    font-family: var(--font-mono); font-size: .8rem; padding: 8px 12px;
+    border: 1px solid var(--line); border-radius: 5px; background: var(--card-alt); color: var(--ink-dim);
+  }
+  .sample b { color: var(--ink); font-weight: 600; }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 10px 20px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 6px; background: var(--card-alt); margin-bottom: 34px; }
+  .legend-item { display: flex; align-items: center; gap: 8px; font-family: var(--font-mono); font-size: .74rem; color: var(--ink-dim); }
+  .swatch { width: 10px; height: 10px; border-radius: 2px; flex: none; }
+  .swatch.diamond { border-radius: 0; transform: rotate(45deg); }
+
+  .diagram-frame {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--card);
+    padding: 18px;
+    margin-bottom: 12px;
+    overflow-x: auto;
+  }
+  .diagram-frame svg { display: block; margin: 0 auto; width: 100%; max-width: 640px; height: auto; }
+  figure.diagram-frame { margin: 0 0 12px; }
+  figcaption {
+    font-size: .84rem; line-height: 1.55; color: var(--ink-dim);
+    max-width: 66ch; margin: 0 0 44px;
+  }
+
+  h2 { font-family: var(--font-display); font-size: 1.2rem; font-weight: 700; margin: 44px 0 6px; }
+  h2 .step-scope { font-family: var(--font-mono); font-size: .7rem; color: var(--ink-dim); font-weight: 400; text-transform: uppercase; letter-spacing: .08em; display: block; margin-bottom: 6px; }
+
+  .steps { display: flex; flex-direction: column; gap: 0; border-top: 1px solid var(--line); margin-top: 18px; }
+  .step { display: grid; grid-template-columns: 34px 1fr; column-gap: 14px; padding: 14px 0; border-bottom: 1px dashed var(--line); }
+  .step-num { font-family: var(--font-mono); font-size: .74rem; padding-top: 3px; }
+  .step-num.gateway { color: var(--gateway); }
+  .step-num.backend { color: var(--backend); }
+  .step-num.db { color: var(--db); }
+  .step-num.ext { color: var(--ext); }
+  .step-num.decision { color: var(--decision); }
+  .step-title { font-weight: 600; font-size: .94rem; margin: 0 0 4px; }
+  .step-title .tag {
+    font-family: var(--font-mono); font-size: .66rem; padding: 2px 7px; border-radius: 3px;
+    margin-left: 8px; vertical-align: 1px; text-transform: uppercase; letter-spacing: .04em;
+  }
+  .tag.gateway { color: var(--gateway); background: var(--gateway-bg); }
+  .tag.backend { color: var(--backend); background: var(--backend-bg); }
+  .tag.db { color: var(--db); background: var(--db-bg); }
+  .tag.ext { color: var(--ext); background: var(--ext-bg); }
+  .tag.decision { color: var(--decision); background: var(--decision-bg); }
+  .step-text { font-size: .87rem; line-height: 1.6; color: var(--ink-dim); margin: 0; max-width: 74ch; }
+
+  .callout {
+    margin-top: 40px; padding: 16px 18px; border: 1px solid var(--line-strong); border-radius: 6px;
+    background: var(--card-alt); font-size: .88rem; line-height: 1.6; color: var(--ink-dim);
+  }
+  .callout strong { color: var(--ink); }
+
+  .agent-profile {
+    display: flex; align-items: center; gap: 16px;
+    padding: 16px 18px; border: 1px solid var(--line); border-radius: 8px;
+    background: var(--backend-bg); margin: 4px 0 28px;
+  }
+  .agent-avatar {
+    width: 46px; height: 46px; border-radius: 10px; flex: none;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--backend); color: var(--card);
+    font-family: var(--font-display); font-weight: 700; font-size: 1.15rem;
+  }
+  .agent-role { font-weight: 700; font-size: .96rem; margin: 0 0 3px; }
+  .agent-sub { font-size: .83rem; color: var(--ink-dim); margin: 0; line-height: 1.5; }
+  .agent-sub code { font-family: var(--font-mono); font-size: .82em; }
+
+  .table-wrap {
+    overflow-x: auto; margin: 0 0 16px;
+    border: 1px solid var(--line); border-radius: 8px;
+  }
+  .process-table { border-collapse: collapse; width: 100%; min-width: 1000px; font-size: .83rem; }
+  .process-table th, .process-table td { padding: 12px 14px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); }
+  .process-table thead th {
+    font-family: var(--font-mono); font-size: .66rem; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--ink-dim); background: var(--card-alt); border-bottom: 1px solid var(--line-strong); white-space: nowrap;
+  }
+  .process-table tbody tr:last-child td { border-bottom: none; }
+  .process-table td { color: var(--ink-dim); line-height: 1.55; }
+  .process-table td.step-name { font-weight: 600; color: var(--ink); border-left: 3px solid var(--line-strong); }
+  .process-table td.step-name .step-ref { display: block; font-family: var(--font-mono); font-weight: 400; font-size: .68rem; color: var(--ink-dim); margin-top: 2px; }
+  .process-table td.step-name.gateway { border-left-color: var(--gateway); }
+  .process-table td.step-name.backend { border-left-color: var(--backend); }
+  .process-table td.step-name.db { border-left-color: var(--db); }
+  .process-table td.step-name.decision { border-left-color: var(--decision); }
+  .process-table td.automation { color: var(--ink); }
+
+  .footnote { margin-top: 22px; font-family: var(--font-mono); font-size: .72rem; color: var(--ink-dim); opacity: .8; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <p class="eyebrow">Instance 1 of N — per-feature execution trace</p>
+  <h1>Course &amp; Schedule Enquiry</h1>
+  <p class="dek">
+    Traces exactly what the code does, function by function, when a customer asks about courses or
+    intake dates on WhatsApp — from the inbound message to the database read and back out to the same
+    chat. Two independent forks are shown because the code genuinely branches twice: once to decide
+    <code>/command</code> vs. free text, and again inside Module A to decide deterministic reply vs.
+    LLM agent reply.
+  </p>
+
+  <div class="sample-box">
+    <span class="sample">Deterministic path input: <b>/schedule C2601</b></span>
+    <span class="sample">Agentic path input: <b>"What courses do you have, and when's the next dental assisting intake?"</b></span>
+  </div>
+
+  <div class="legend">
+    <div class="legend-item"><span class="swatch" style="background:var(--gateway)"></span>Gateway (whatsapp-server)</div>
+    <div class="legend-item"><span class="swatch" style="background:var(--backend)"></span>Backend / agent logic</div>
+    <div class="legend-item"><span class="swatch" style="background:var(--db)"></span>PostgreSQL read/write</div>
+    <div class="legend-item"><span class="swatch" style="background:var(--ext)"></span>OpenAI (external LLM)</div>
+    <div class="legend-item"><span class="swatch diamond" style="background:var(--decision)"></span>Decision / branch</div>
+  </div>
+
+  <figure class="diagram-frame">
+    <svg viewBox="0 0 900 1460" role="img" aria-label="Flowchart: a course/schedule enquiry forks at the intent router into a slash-command path or a free-text path, forks again inside Module A into a deterministic reply or a CrewAI agent reply, and both routes converge on the same repositories.py SQL against the courses and course_schedules tables before the reply is delivered back through the gateway.">
+      <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--ink-dim)"></path>
+        </marker>
+      </defs>
+
+      <!-- spine connectors -->
+      <g fill="none" stroke="var(--ink-dim)" stroke-width="1.75" marker-end="url(#arrow)">
+        <line x1="450" y1="67"   x2="450" y2="106"></line>
+        <line x1="450" y1="162"  x2="450" y2="201"></line>
+        <line x1="450" y1="257"  x2="450" y2="288"></line>
+        <line x1="340" y1="330"  x2="197" y2="411"></line>
+        <line x1="560" y1="330"  x2="703" y2="411"></line>
+        <line x1="190" y1="467"  x2="437" y2="511"></line>
+        <line x1="710" y1="467"  x2="463" y2="511"></line>
+        <line x1="450" y1="567"  x2="450" y2="601"></line>
+        <line x1="450" y1="657"  x2="450" y2="683"></line>
+        <line x1="340" y1="725"  x2="197" y2="806"></line>
+        <line x1="560" y1="725"  x2="703" y2="806"></line>
+        <line x1="190" y1="862"  x2="437" y2="911"></line>
+        <line x1="710" y1="862"  x2="463" y2="911"></line>
+        <line x1="450" y1="967"  x2="450" y2="984"></line>
+        <line x1="450" y1="1070" x2="450" y2="1111"></line>
+        <line x1="450" y1="1167" x2="450" y2="1206"></line>
+        <line x1="450" y1="1262" x2="450" y2="1301"></line>
+        <line x1="450" y1="1357" x2="450" y2="1371"></line>
+      </g>
+
+      <!-- branch edge labels -->
+      <g font-size="11" fill="var(--ink-dim)" text-anchor="middle">
+        <text x="230" y="378">/command</text>
+        <text x="675" y="378">free text</text>
+        <text x="250" y="773">yes</text>
+        <text x="655" y="773">no</text>
+      </g>
+
+      <!-- N1 start pill -->
+      <rect x="300" y="13" width="300" height="54" rx="27" fill="var(--card)" stroke="var(--ink-dim)" stroke-width="1.5"></rect>
+      <text x="450" y="34" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">Customer's WhatsApp</text>
+      <text x="450" y="50" text-anchor="middle" font-size="10" fill="var(--ink-dim)">"/schedule C2601"  ·  "what courses do you offer?"</text>
+
+      <!-- N2 gateway -->
+      <rect x="300" y="108" width="300" height="54" rx="8" fill="var(--card)" stroke="var(--gateway)" stroke-width="1.5"></rect>
+      <text x="450" y="130" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">Gateway — whatsapp-server</text>
+      <text x="450" y="146" text-anchor="middle" font-size="10" fill="var(--ink-dim)">POST /webhook/whatsapp</text>
+
+      <!-- N3 orchestrator -->
+      <rect x="300" y="203" width="300" height="54" rx="8" fill="var(--card)" stroke="var(--backend)" stroke-width="1.5"></rect>
+      <text x="450" y="225" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">Orchestrator</text>
+      <text x="450" y="241" text-anchor="middle" font-size="10" fill="var(--ink-dim)">handle_inbound() — customer resolved &amp; registered</text>
+
+      <!-- D1 decision -->
+      <polygon points="450,290 560,330 450,370 340,330" fill="var(--card)" stroke="var(--decision)" stroke-width="1.5"></polygon>
+      <text x="450" y="326" text-anchor="middle" font-size="11" fill="var(--ink)">starts with</text>
+      <text x="450" y="340" text-anchor="middle" font-size="11" fill="var(--ink)">'/' ?</text>
+
+      <!-- N4L parse_command -->
+      <rect x="40" y="413" width="300" height="54" rx="8" fill="var(--card)" stroke="var(--backend)" stroke-width="1.5"></rect>
+      <text x="190" y="435" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">parse_command()</text>
+      <text x="190" y="451" text-anchor="middle" font-size="10" fill="var(--ink-dim)">deterministic — no LLM call</text>
+
+      <!-- N4R classify_free_text -->
+      <rect x="560" y="413" width="300" height="54" rx="8" fill="var(--card)" stroke="var(--backend)" stroke-width="1.5"></rect>
+      <text x="710" y="435" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">classify_free_text()</text>
+      <text x="710" y="451" text-anchor="middle" font-size="10" fill="var(--ink-dim)">Router LLM, or keyword heuristic</text>
+
+      <!-- N5 merged decision -->
+      <rect x="300" y="513" width="300" height="54" rx="8" fill="var(--card)" stroke="var(--backend)" stroke-width="1.5"></rect>
+      <text x="450" y="545" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">route = { module: "A" }</text>
+
+      <!-- N6 dispatch -->
+      <rect x="300" y="603" width="300" height="54" rx="8" fill="var(--card)" stroke="var(--backend)" stroke-width="1.5"></rect>
+      <text x="450" y="635" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">module_a.run(payload, route)</text>
+
+      <!-- D2 decision -->
+      <polygon points="450,685 560,725 450,765 340,725" fill="var(--card)" stroke="var(--decision)" stroke-width="1.5"></polygon>
+      <text x="450" y="730" text-anchor="middle" font-size="11" fill="var(--ink)">is_command?</text>
+
+      <!-- N7L deterministic -->
+      <rect x="40" y="808" width="300" height="54" rx="8" fill="var(--card)" stroke="var(--backend)" stroke-width="1.5"></rect>
+      <text x="190" y="830" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">_command_reply()</text>
+      <text x="190" y="846" text-anchor="middle" font-size="10" fill="var(--ink-dim)">services/courses.py</text>
+
+      <!-- N7R agent -->
+      <rect x="560" y="808" width="300" height="54" rx="8" fill="var(--card)" stroke="var(--backend)" stroke-width="1.5"></rect>
+      <text x="710" y="830" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">_run_agent() + tool call</text>
+      <text x="710" y="846" text-anchor="middle" font-size="10" fill="var(--ext)">CrewAI Agent → OpenAI GPT-4o-mini</text>
+
+      <!-- N8 repositories -->
+      <rect x="300" y="913" width="300" height="54" rx="8" fill="var(--card)" stroke="var(--backend)" stroke-width="1.5"></rect>
+      <text x="450" y="935" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">repositories.py</text>
+      <text x="450" y="951" text-anchor="middle" font-size="10" fill="var(--ink-dim)">SQL SELECT — get_schedules(), etc.</text>
+
+      <!-- DB cylinder (body + sides + two caps, avoids fragile hand-arc paths) -->
+      <rect x="340" y="1000" width="220" height="56" fill="var(--card)"></rect>
+      <line x1="340" y1="1000" x2="340" y2="1056" stroke="var(--db)" stroke-width="1.5"></line>
+      <line x1="560" y1="1000" x2="560" y2="1056" stroke="var(--db)" stroke-width="1.5"></line>
+      <ellipse cx="450" cy="1056" rx="110" ry="14" fill="var(--card)" stroke="var(--db)" stroke-width="1.5"></ellipse>
+      <ellipse cx="450" cy="1000" rx="110" ry="14" fill="var(--card)" stroke="var(--db)" stroke-width="1.5"></ellipse>
+      <text x="450" y="1030" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">PostgreSQL</text>
+      <text x="450" y="1046" text-anchor="middle" font-size="10" fill="var(--ink-dim)">courses · course_schedules</text>
+
+      <!-- N10 reply composed -->
+      <rect x="300" y="1113" width="300" height="54" rx="8" fill="var(--card)" stroke="var(--backend)" stroke-width="1.5"></rect>
+      <text x="450" y="1135" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">Reply text composed</text>
+      <text x="450" y="1151" text-anchor="middle" font-size="10" fill="var(--ink-dim)">verbatim, or LLM-phrased over the facts</text>
+
+      <!-- N11 persist + log -->
+      <rect x="300" y="1208" width="300" height="54" rx="8" fill="var(--card)" stroke="var(--backend)" stroke-width="1.5"></rect>
+      <text x="450" y="1230" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">Persist + log</text>
+      <text x="450" y="1246" text-anchor="middle" font-size="10" fill="var(--ink-dim)">chat_memory INSERT ×2 · query_log.emit()</text>
+
+      <!-- N12 gateway delivery -->
+      <rect x="300" y="1303" width="300" height="54" rx="8" fill="var(--card)" stroke="var(--gateway)" stroke-width="1.5"></rect>
+      <text x="450" y="1325" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">Gateway delivery</text>
+      <text x="450" y="1341" text-anchor="middle" font-size="10" fill="var(--ink-dim)">send_whatsapp() → POST /send-reply</text>
+
+      <!-- N13 end pill -->
+      <rect x="300" y="1373" width="300" height="54" rx="27" fill="var(--card)" stroke="var(--ink-dim)" stroke-width="1.5"></rect>
+      <text x="450" y="1405" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">Reply delivered on WhatsApp</text>
+    </svg>
+    <figcaption>
+      The router forks once on <code>/</code> (deterministic parse vs. an LLM/heuristic classifier), and
+      Module A forks again on <code>is_command</code> (deterministic reply vs. a CrewAI agent that reasons
+      over a tool). Both forks are drawn because the code takes genuinely different routes — but both
+      always land on the exact same <code>repositories.py</code> SQL against <code>courses</code> and
+      <code>course_schedules</code>, so the two paths can never disagree on the facts, only on phrasing.
+    </figcaption>
+  </figure>
+
+  <p class="eyebrow" style="margin-top:36px;">For stakeholders — process, data &amp; automation value</p>
+  <h2 style="margin-top:0;">What happens at each step, and what it replaces</h2>
+  <p class="dek">
+    Every box in the diagram above is broken down below into what a business reader needs: the
+    activity being performed, the data it needs coming in, the data it produces going out, and —
+    since this whole journey is carried out by <strong>Agent A</strong> — what running it as an
+    autonomous agent buys the business over a person doing the same steps by hand.
+  </p>
+
+  <div class="agent-profile">
+    <div class="agent-avatar">A</div>
+    <div>
+      <p class="agent-role">Agent A — the Enquiry &amp; Lead Nurturing Agent</p>
+      <p class="agent-sub">
+        Persona: <code>"Q&amp;M Training Enquiry Assistant"</code>. Answers only from the official
+        course knowledge base and live database — never invents a fee, date, or code. Owns steps
+        8–12 below; captures lead details and escalates to a human staff member whenever it isn't
+        confident, instead of guessing.
+      </p>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table class="process-table">
+      <thead>
+        <tr>
+          <th>Process step</th>
+          <th>Activity</th>
+          <th>Input — data needed</th>
+          <th>Output — data produced</th>
+          <th>Automation value</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="step-name">1 · Customer sends the enquiry<span class="step-ref">WhatsApp</span></td>
+          <td>Customer types a question about courses or intake dates into WhatsApp, in their own words or as a shortcut command.</td>
+          <td>—  (customer-initiated)</td>
+          <td>Raw WhatsApp message</td>
+          <td>An always-open channel — no call-centre hours, no hold queue, no app to download.</td>
+        </tr>
+        <tr>
+          <td class="step-name gateway">2 · Message is captured<span class="step-ref">Gateway</span></td>
+          <td>The WhatsApp gateway picks up the message the instant it arrives and hands it to the backend.</td>
+          <td>Incoming WhatsApp message event</td>
+          <td>Structured message record (sender + text)</td>
+          <td>100% capture rate — nothing is missed, and nothing needs a person watching a chat window.</td>
+        </tr>
+        <tr>
+          <td class="step-name backend">3 · Customer is identified<span class="step-ref">Orchestrator</span></td>
+          <td>The system matches the sender to an existing customer profile, or creates one, and confirms they're a registered participant.</td>
+          <td>WhatsApp ID, phone number</td>
+          <td>Confirmed customer profile</td>
+          <td>Every enquiry is automatically linked to the right customer and their history — no manual lookup or data entry by staff.</td>
+        </tr>
+        <tr>
+          <td class="step-name decision">4 · Message is interpreted<span class="step-ref">Intent Router</span></td>
+          <td>The system decides whether this is a precise shortcut (e.g. a course code) or a casually-worded question, and reads it accordingly.</td>
+          <td>Message text, last 6 turns of conversation</td>
+          <td>Routing decision — shortcut vs. natural question</td>
+          <td>One system handles both a power-user's shortcut and a first-timer's plain English — the customer never has to learn special syntax.</td>
+        </tr>
+        <tr>
+          <td class="step-name backend">5 · Shortcut is read directly<span class="step-ref">parse_command()</span></td>
+          <td>If it's an exact command, the course code and requested action are read off directly — no interpretation needed.</td>
+          <td>Command text (e.g. a course code)</td>
+          <td>Exact requested course/intake</td>
+          <td>Instant and 100% accurate for anyone who already knows the shortcut, at zero AI cost.</td>
+        </tr>
+        <tr>
+          <td class="step-name backend">6 · Free-text question is understood<span class="step-ref">classify_free_text()</span></td>
+          <td>AI reads the question in the context of what was already discussed, and recognises it as a course/schedule enquiry.</td>
+          <td>Free-text question, conversation history</td>
+          <td>Confirmed intent: "enquiry"</td>
+          <td>Understands real customer phrasing — "what about the fees?" after a course was named earlier — the way a trained officer would, without a rigid menu.</td>
+        </tr>
+        <tr>
+          <td class="step-name backend">7 · Agent A is activated<span class="step-ref">module_a.run()</span></td>
+          <td>The enquiry is handed to Agent A, the dedicated enquiry specialist, the moment it's confirmed to be a course/schedule question.</td>
+          <td>Routing decision + original message</td>
+          <td>Agent A invoked with full context</td>
+          <td>The right specialist is engaged automatically, every single time — no dispatch delay, no wrong department.</td>
+        </tr>
+        <tr>
+          <td class="step-name decision">8 · Agent A picks its reply strategy<span class="step-ref">is_command?</span></td>
+          <td>Agent A decides whether a fast, direct lookup will do, or whether it needs to actually reason about what's being asked.</td>
+          <td>Whether the message was a shortcut command</td>
+          <td>Reply-strategy decision</td>
+          <td>Cheap, instant answers are used whenever possible; AI reasoning is reserved for genuinely open-ended questions — keeping cost and response time down.</td>
+        </tr>
+        <tr>
+          <td class="step-name backend">9 · Direct lookup<span class="step-ref">_command_reply()</span></td>
+          <td>For a precise shortcut, the exact course or schedule facts are looked up with no interpretation involved.</td>
+          <td>Course code</td>
+          <td>Course/schedule facts</td>
+          <td>Guaranteed-accurate, instant answer for anyone who already knows what they want.</td>
+        </tr>
+        <tr>
+          <td class="step-name backend">10 · Agent A reasons over the question<span class="step-ref">_run_agent()</span></td>
+          <td>Agent A reads the official knowledge base and the conversation so far, and decides for itself which piece of information will actually answer the customer — course list, fees, or intake dates.</td>
+          <td>Customer's question, chat history, course knowledge base</td>
+          <td>Decision on what to look up, and the result of that lookup</td>
+          <td>This is the step that replaces a human agent's judgement — resolving vague or multi-turn questions on its own, and flagging the query to staff instead of guessing when it isn't confident.</td>
+        </tr>
+        <tr>
+          <td class="step-name db">11 · Live data is retrieved<span class="step-ref">Database</span></td>
+          <td>The exact course fee, intake dates and seats remaining are pulled from the live system of record.</td>
+          <td>Course identifier</td>
+          <td>Fee, intake dates, seats remaining</td>
+          <td>Every answer comes from the same live database staff use — no stale spreadsheets, no copy-paste errors, one source of truth.</td>
+        </tr>
+        <tr>
+          <td class="step-name backend">12 · Reply is composed<span class="step-ref">format / LLM phrasing</span></td>
+          <td>The facts are turned into a WhatsApp-ready reply — sent exactly as-is for a shortcut, or phrased naturally by Agent A for a conversational question.</td>
+          <td>Course/schedule facts</td>
+          <td>Finished reply text</td>
+          <td>Reads like a helpful person texted back, not a printed brochure — while every number and code stays locked to the real data, never invented.</td>
+        </tr>
+        <tr>
+          <td class="step-name db">13 · Conversation is recorded<span class="step-ref">chat_memory + audit log</span></td>
+          <td>The exchange is saved so the next message has context, and a full trace of the decision is logged.</td>
+          <td>Customer message, Agent A's reply</td>
+          <td>Chat history entry, audit-trail record</td>
+          <td>Every enquiry is documented automatically — a full audit trail for QA/compliance, and no staff time spent taking notes.</td>
+        </tr>
+        <tr>
+          <td class="step-name gateway">14 · Answer is delivered<span class="step-ref">Gateway</span></td>
+          <td>The finished reply is sent back down the same WhatsApp conversation the question came from.</td>
+          <td>Reply text</td>
+          <td>Delivered WhatsApp message</td>
+          <td class="automation">Typically seconds from question to answer, any hour of the day, for any number of customers at once — with no added headcount.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="eyebrow" style="margin-top:44px;">For engineers — implementation trace</p>
+  <h2 style="margin-top:0;">Same journey, at file-and-function level</h2>
+  <p class="dek">The rest of this page repeats the identical path with exact code references, for anyone implementing or auditing it.</p>
+
+  <h2><span class="step-scope">Stage 1 — Inbound: phone to backend</span>Getting the message onto the orchestrator</h2>
+  <div class="steps">
+    <div class="step">
+      <span class="step-num gateway">01</span>
+      <div><p class="step-title">Customer sends a WhatsApp message <span class="tag gateway">gateway</span></p>
+      <p class="step-text">Either a slash command (<code>/schedule C2601</code>) or free text ("What courses do you offer, and when's the next intake?"). Both are handled by the same pipeline — the fork happens twice downstream, not here.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-num gateway">02</span>
+      <div><p class="step-title">whatsapp-server receives the message event <span class="tag gateway">gateway</span></p>
+      <p class="step-text"><code>whatsapp-server/server.js</code> — the only component with a live WhatsApp Web session. On a <code>message</code> event it downloads any attached media (none, for an enquiry) and forwards a JSON payload.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-num gateway">03</span>
+      <div><p class="step-title">POST /webhook/whatsapp <span class="tag gateway">gateway</span> <span class="tag backend">backend</span></p>
+      <p class="step-text">The gateway's only outbound call for inbound traffic. Received by FastAPI on <code>backend :8000</code>, defined in <code>app/main.py</code>.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-num backend">04</span>
+      <div><p class="step-title">orchestrator.handle_inbound(payload) <span class="tag backend">backend</span></p>
+      <p class="step-text"><code>app/orchestrator.py</code> — the single entry point for every inbound message. Parses the sender (<code>whatsapp_id</code>, phone, display name) from the gateway's <code>from</code> field.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-num db">05</span>
+      <div><p class="step-title">Customer isolation <span class="tag db">database</span></p>
+      <p class="step-text"><code>repo.get_or_create_customer(whatsapp_id)</code> — an atomic upsert against the <code>customers</code> table. This is the partition key for every other lookup; no two users ever share state.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-num decision">06</span>
+      <div><p class="step-title">Registration gate <span class="tag decision">decision</span></p>
+      <p class="step-text">Checks <code>phone_confirmed</code>, <code>full_name</code>, <code>nric</code>, <code>email</code> are all on file. For this instance the customer is assumed already registered, so the turn proceeds to routing — an unregistered customer would branch into the free-text registration flow instead, covered in <a href="02_new_customer_registration.html">Instance 02 — New Customer Registration</a>.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-num backend">07</span>
+      <div><p class="step-title">context.set_message(...) <span class="tag backend">backend</span></p>
+      <p class="step-text"><code>app/context.py</code> — a request-scoped <code>ContextVar</code> holding <code>whatsapp_id</code>, <code>phone</code>, and the full <code>customer</code> row, so tools never receive identity fields as LLM-fillable arguments.</p></div>
+    </div>
+  </div>
+
+  <h2><span class="step-scope">Stage 2 — Fork 1: intent routing</span>/command vs. free text</h2>
+  <div class="steps">
+    <div class="step">
+      <span class="step-num decision">08</span>
+      <div><p class="step-title">router.route(payload) <span class="tag decision">decision</span></p>
+      <p class="step-text"><code>app/crews/router.py</code> — <code>parse_command(body)</code> checks whether the message starts with <code>/</code>.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-num backend">09a</span>
+      <div><p class="step-title">Branch — slash command <span class="tag backend">backend</span></p>
+      <p class="step-text">If it matches an entry in the <code>COMMANDS</code> registry (<code>app/commands.py</code>), <code>parse_command</code> returns a fully-structured routing decision — <code>{module: "A", command: "schedule", arg: "C2601", is_command: true}</code> — deterministically. No LLM is ever consulted for a well-formed command.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-num backend">09b</span>
+      <div><p class="step-title">Branch — free text <span class="tag backend">backend</span></p>
+      <p class="step-text"><code>classify_free_text(body, has_media=False)</code> first reads the last 6 turns via <code>repo.recent_memory(wid, limit=6)</code> <span class="tag db">database</span> (<code>chat_memory</code> table) for context.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-num ext">09c</span>
+      <div><p class="step-title">Router Agent LLM classification <span class="tag ext">OpenAI</span></p>
+      <p class="step-text">If <code>OPENAI_API_KEY</code> is set, <code>kickoff_agent(role="WhatsApp Intent Router")</code> calls GPT-4o-mini with the conversation history and the <code>COMMAND_REFERENCE</code> block, and returns one label: <code>ENQUIRY</code>, <code>ENROLLMENT</code>, or <code>PAYMENT</code>. Without a key (or on agent failure), <code>_heuristic()</code> keyword-matches instead — the system degrades gracefully rather than failing the turn.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-num backend">10</span>
+      <div><p class="step-title">Both branches converge <span class="tag backend">backend</span></p>
+      <p class="step-text">Either path produces the same shape: a routing decision with <code>module: "A"</code>. The orchestrator logs the routing line and dispatches to <code>module_a.run(payload, decision)</code>.</p></div>
+    </div>
+  </div>
+
+  <h2><span class="step-scope">Stage 3 — Fork 2: Module A reply strategy</span>Deterministic command vs. CrewAI agent</h2>
+  <div class="steps">
+    <div class="step">
+      <span class="step-num decision">11</span>
+      <div><p class="step-title">route.is_command? <span class="tag decision">decision</span></p>
+      <p class="step-text"><code>app/crews/module_a.py: run()</code> — the second and final fork for this instance.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-num backend">12a</span>
+      <div><p class="step-title">Deterministic reply <span class="tag backend">backend</span></p>
+      <p class="step-text"><code>_command_reply("schedule", "C2601")</code> calls straight into <code>services/courses.py: format_schedule()</code> (or <code>format_courses()</code> for a bare <code>/courses</code>). No agent, no LLM token spent — same code path a human-typed exact command always takes.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-num backend">12b</span>
+      <div><p class="step-title">Agentic reply <span class="tag backend">backend</span></p>
+      <p class="step-text"><code>_run_agent(body)</code> reads 8 turns of history <span class="tag db">database</span> (<code>chat_memory</code>), then <code>kickoff_agent()</code> builds a CrewAI <code>Agent</code> + <code>Task</code> + single-agent <code>Crew</code> — role <em>"Q&amp;M Training Enquiry Assistant"</em>, backstory = the full FAQ knowledge base, tools = <code>MODULE_A_TOOLS</code> (List Courses, Course Fees, Course Schedule, SkillsFuture Info, Save Lead Data, Flag For Staff Review).</p></div>
+    </div>
+    <div class="step">
+      <span class="step-num ext">13</span>
+      <div><p class="step-title">LLM reasons and picks a tool <span class="tag ext">OpenAI</span></p>
+      <p class="step-text">GPT-4o-mini reads the task description (conversation history + new message) and decides which tool(s) answer it — here, <code>List Courses</code> and/or <code>Course Schedule</code>. Per the module's persona, it must resolve "which course" from chat history before guessing, and never invent a fee, date, or code.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-num backend">14</span>
+      <div><p class="step-title">Tool executes <span class="tag backend">backend</span></p>
+      <p class="step-text"><code>tools/course_tools.py: course_schedule_tool()</code> reads <code>context.customer()</code>, then calls the exact same <code>services/courses.py: format_schedule()</code> the deterministic path uses — one source of truth for both paths.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-num db">15</span>
+      <div><p class="step-title">Database read (both paths converge here) <span class="tag db">database</span></p>
+      <p class="step-text"><code>repositories.py</code> — <code>resolve_course_arg()</code> → <code>get_course_by_name()</code> / <code>get_course_by_course_id()</code>, then <code>get_schedules(course_id)</code>. Raw SQL <code>SELECT</code> against the <code>courses</code> and <code>course_schedules</code> tables, e.g.: <code>SELECT * FROM course_schedules WHERE course_id = %s AND active = TRUE ORDER BY start_date</code>. Rows come back with each intake's <code>schedule_id</code> (SH-code), <code>label</code>, and <code>seats</code>.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-num backend">16</span>
+      <div><p class="step-title">Formatting <span class="tag backend">backend</span></p>
+      <p class="step-text"><code>format_schedule()</code> renders the rows into WhatsApp-ready text: course name, C-code, then each intake as <code>[SH-code]  label  (seats left)</code>.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-num ext">17</span>
+      <div><p class="step-title">Reply shaping differs by branch <span class="tag ext">OpenAI</span> <span class="tag backend">backend</span></p>
+      <p class="step-text"><strong>Command path:</strong> the formatted text <em>is</em> the reply, verbatim. <strong>Agent path:</strong> the formatted text comes back to the LLM as a tool <em>Observation</em>; the agent then writes a short, natural sentence around the facts — carrying every code/date/fee over exactly, but composing the surrounding language itself rather than pasting the raw list.</p></div>
+    </div>
+  </div>
+
+  <h2><span class="step-scope">Stage 4 — Outbound: backend to phone</span>Persisting and delivering the reply</h2>
+  <div class="steps">
+    <div class="step">
+      <span class="step-num db">18</span>
+      <div><p class="step-title">Chat memory persisted <span class="tag db">database</span></p>
+      <p class="step-text">Back in <code>orchestrator.handle_inbound()</code>: <code>repo.add_memory(wid, "user", body)</code> and <code>repo.add_memory(wid, "assistant", reply)</code> — two <code>INSERT</code>s into <code>chat_memory</code>, best-effort (a write failure here never blocks the reply).</p></div>
+    </div>
+    <div class="step">
+      <span class="step-num backend">19</span>
+      <div><p class="step-title">Trace logged <span class="tag backend">backend</span></p>
+      <p class="step-text"><code>query_log.emit()</code> mirrors the full TURN → ROUTING → REPLY trace (plus every tool call and its result) to console and, if <code>QUERY_LOG_ENABLED=true</code>, to <code>backend/logs/query_log_YYYY-MM-DD.txt</code>.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-num gateway">20</span>
+      <div><p class="step-title">Delivery <span class="tag gateway">gateway</span></p>
+      <p class="step-text"><code>whatsapp_client.send_whatsapp(routing_id, reply)</code> sends <code>POST /send-reply</code> to <code>whatsapp-server</code> (<code>WHATSAPP_SEND_URL</code>), which pushes the text back through the linked WhatsApp Web session to the customer's phone — the same chat the enquiry came from.</p></div>
+    </div>
+  </div>
+
+  <div class="callout">
+    <strong>Why two forks matter:</strong> the deterministic command path and the CrewAI agent path are
+    genuinely two different code routes through Module A, but they are designed to never disagree —
+    both terminate in the exact same <code>services/courses.py</code> functions and the exact same SQL
+    in <code>repositories.py</code>. The agent only changes how the answer is <em>phrased</em>, never
+    what facts it's allowed to state.
+  </div>
+
+  <p class="footnote">Q&amp;M Dental Group — WhatsApp Enquiry &amp; Enrollment System · source: app/orchestrator.py, app/crews/router.py, app/crews/module_a.py, app/tools/course_tools.py, app/services/courses.py, app/repositories.py</p>
+
+</div>
+
+</body>
+</html>

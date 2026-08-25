@@ -1,0 +1,11 @@
+# Ragas Phase 1 agentic evaluation harness — kept separate from the app's
+# own backend/requirements.txt so evaluation dependencies never touch
+# production installs.
+ragas==0.2.15
+langchain-community<0.4
+langchain<1.0
+langchain-core<1.0
+langchain-openai<0.4
+httpx>=0.27.0
+PyYAML>=6.0
+python-dotenv>=1.0.0

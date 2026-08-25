@@ -1,0 +1,18 @@
+id: module_b_enroll_happy_path
+module: B
+metric: goal_accuracy
+description: >
+  End-to-end free-text enrollment (no /enroll command typed): the agent must
+  resolve "the infection control course" to C2602, present the two intake
+  options, resolve the bare confirmation "intake 2" against the list it just
+  showed, then validate + enroll + issue an invoice itself - without asking
+  the participant to type a raw /enroll command once it has enough
+  information (per Module B's hard rule in crews/module_b.py).
+reference: >
+  The participant is enrolled in the "Infection Control for Dental Clinics"
+  course for the 11-12 Aug 2026 intake, and the final reply confirms the
+  enrollment and states that an invoice has been issued/sent.
+threshold: 0.8
+turns:
+  - "I want to enroll in the infection control course"
+  - "intake 2"

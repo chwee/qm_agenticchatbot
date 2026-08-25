@@ -1,0 +1,34 @@
+id: module_c_balance_after_enroll
+module: C
+metric: aspect_critic
+description: >
+  Chains a Module B enrollment into a free-text Module C balance enquiry, to
+  confirm the Intent Router correctly hands "how much do I still owe" off to
+  Module C's Payment Balance tool and reports a real, itemised figure for
+  this specific enrollment rather than an invented one. Uses AspectCritic
+  rather than AgentGoalAccuracyWithReference: that metric's own
+  InferGoalOutcomePrompt summarises the WHOLE conversation into a single
+  end_state anchored on the first turn's stated intent (enrol), and never
+  passes the scenario's reference into that summarisation step - so it
+  systematically dropped the third turn's balance answer from its summary
+  and scored 0 regardless of how the reference was worded. AspectCritic asks
+  a single targeted yes/no question that can see the full transcript
+  directly, which fits a multi-intent conversation (enrol, then ask
+  something else) far better than a single-goal-outcome metric.
+definition: >
+  Considering the full conversation: was the participant successfully
+  enrolled in the CPR & Basic Life Support course, AND did the assistant's
+  final reply (responding to "how much do I still need to pay?") state a
+  real, itemised outstanding balance for that specific enrollment -
+  referencing the actual invoice number and correct SkillsFuture/PayNow
+  amounts consistent with the enrollment confirmation shown earlier - rather
+  than inventing a figure, giving a generic non-answer, or declining to
+  answer? Answer "Yes" (1) only if both the enrollment succeeded AND the
+  balance was correctly and specifically reported; answer "No" (0)
+  otherwise.
+strictness: 3
+threshold: 1.0
+turns:
+  - "I want to enroll in the CPR and basic life support course"
+  - "intake 1"
+  - "how much do I still need to pay?"

@@ -1,0 +1,550 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Flow — New Customer Registration (Registration Gate)</title>
+<style>
+  :root {
+    --paper: #F5F2EA;
+    --card: #FFFFFF;
+    --card-alt: #FBF9F3;
+    --ink: #1E2430;
+    --ink-dim: #5B6270;
+    --line: #DED7C4;
+    --line-strong: #C9C0A8;
+
+    --gateway: #1F7A5C;   --gateway-bg: rgba(31,122,92,0.09);
+    --backend: #35478C;   --backend-bg: rgba(53,71,140,0.08);
+    --db: #7C4A9E;        --db-bg: rgba(124,74,158,0.08);
+    --ext: #8A6A2F;       --ext-bg: rgba(150,121,74,0.10);
+    --decision: #A3432E;  --decision-bg: rgba(163,67,46,0.08);
+
+    --font-display: -apple-system, BlinkMacSystemFont, "Segoe UI Semibold", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    --font-mono: ui-monospace, "Cascadia Code", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #12151B; --card: #181C24; --card-alt: #1E2330;
+      --ink: #E9E6DC; --ink-dim: #9CA0AC;
+      --line: #2B303C; --line-strong: #3A4050;
+      --gateway: #46CB9B; --gateway-bg: rgba(70,203,155,0.10);
+      --backend: #93A2F2; --backend-bg: rgba(147,162,242,0.10);
+      --db: #D19DF0; --db-bg: rgba(209,157,240,0.10);
+      --ext: #E4C27E; --ext-bg: rgba(228,194,126,0.10);
+      --decision: #E28870; --decision-bg: rgba(226,136,112,0.10);
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--font-body); -webkit-font-smoothing: antialiased; }
+  .page { max-width: 980px; margin: 0 auto; padding: 48px 24px 90px; }
+
+  .eyebrow { font-family: var(--font-mono); font-size: .72rem; letter-spacing: .16em; text-transform: uppercase; color: var(--backend); margin: 0 0 10px; }
+  h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(1.5rem, 1.1rem + 1.6vw, 2.05rem); letter-spacing: -0.01em; line-height: 1.15; text-wrap: balance; margin: 0 0 14px; }
+  .dek { font-size: .98rem; line-height: 1.6; color: var(--ink-dim); max-width: 68ch; margin: 0 0 22px; }
+  .dek code, p code, li code, td code { font-family: var(--font-mono); font-size: .87em; color: var(--ink); background: var(--card-alt); border: 1px solid var(--line); border-radius: 3px; padding: 1px 5px; }
+
+  .sample-box { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 30px; }
+  .sample {
+    font-family: var(--font-mono); font-size: .8rem; padding: 8px 12px;
+    border: 1px solid var(--line); border-radius: 5px; background: var(--card-alt); color: var(--ink-dim);
+  }
+  .sample b { color: var(--ink); font-weight: 600; }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 10px 20px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 6px; background: var(--card-alt); margin-bottom: 34px; }
+  .legend-item { display: flex; align-items: center; gap: 8px; font-family: var(--font-mono); font-size: .74rem; color: var(--ink-dim); }
+  .swatch { width: 10px; height: 10px; border-radius: 2px; flex: none; }
+  .swatch.diamond { border-radius: 0; transform: rotate(45deg); }
+
+  .diagram-frame {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--card);
+    padding: 18px;
+    margin-bottom: 12px;
+    overflow-x: auto;
+  }
+  .diagram-frame svg { display: block; margin: 0 auto; width: 100%; max-width: 640px; height: auto; }
+  figure.diagram-frame { margin: 0 0 12px; }
+  figcaption {
+    font-size: .84rem; line-height: 1.55; color: var(--ink-dim);
+    max-width: 66ch; margin: 0 0 28px;
+  }
+
+  .callout {
+    margin: 0 0 34px; padding: 16px 18px; border: 1px solid var(--line-strong); border-radius: 6px;
+    background: var(--card-alt); font-size: .88rem; line-height: 1.6; color: var(--ink-dim);
+  }
+  .callout strong { color: var(--ink); }
+  .callout h3 { margin: 0 0 8px; font-family: var(--font-display); font-size: .98rem; color: var(--ink); }
+
+  .agent-profile {
+    display: flex; align-items: center; gap: 16px;
+    padding: 16px 18px; border: 1px solid var(--line); border-radius: 8px;
+    background: var(--backend-bg); margin: 4px 0 28px;
+  }
+  .agent-avatar {
+    width: 46px; height: 46px; border-radius: 10px; flex: none;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--backend); color: var(--card);
+    font-family: var(--font-display); font-weight: 700; font-size: 1.15rem;
+  }
+  .agent-role { font-weight: 700; font-size: .96rem; margin: 0 0 3px; }
+  .agent-sub { font-size: .83rem; color: var(--ink-dim); margin: 0; line-height: 1.5; }
+  .agent-sub code { font-family: var(--font-mono); font-size: .82em; }
+
+  .table-wrap {
+    overflow-x: auto; margin: 0 0 16px;
+    border: 1px solid var(--line); border-radius: 8px;
+  }
+  .process-table { border-collapse: collapse; width: 100%; min-width: 1000px; font-size: .83rem; }
+  .process-table th, .process-table td { padding: 12px 14px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); }
+  .process-table thead th {
+    font-family: var(--font-mono); font-size: .66rem; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--ink-dim); background: var(--card-alt); border-bottom: 1px solid var(--line-strong); white-space: nowrap;
+  }
+  .process-table tbody tr:last-child td { border-bottom: none; }
+  .process-table td { color: var(--ink-dim); line-height: 1.55; }
+  .process-table td.step-name { font-weight: 600; color: var(--ink); border-left: 3px solid var(--line-strong); }
+  .process-table td.step-name .step-ref { display: block; font-family: var(--font-mono); font-weight: 400; font-size: .68rem; color: var(--ink-dim); margin-top: 2px; }
+  .process-table td.step-name.gateway { border-left-color: var(--gateway); }
+  .process-table td.step-name.backend { border-left-color: var(--backend); }
+  .process-table td.step-name.db { border-left-color: var(--db); }
+  .process-table td.step-name.decision { border-left-color: var(--decision); }
+  .process-table td.automation { color: var(--ink); }
+
+  h2 { font-family: var(--font-display); font-size: 1.2rem; font-weight: 700; margin: 44px 0 6px; }
+  h2 .step-scope { font-family: var(--font-mono); font-size: .7rem; color: var(--ink-dim); font-weight: 400; text-transform: uppercase; letter-spacing: .08em; display: block; margin-bottom: 6px; }
+
+  .steps { display: flex; flex-direction: column; gap: 0; border-top: 1px solid var(--line); margin-top: 18px; }
+  .step { display: grid; grid-template-columns: 34px 1fr; column-gap: 14px; padding: 14px 0; border-bottom: 1px dashed var(--line); }
+  .step-num { font-family: var(--font-mono); font-size: .74rem; padding-top: 3px; }
+  .step-num.gateway { color: var(--gateway); }
+  .step-num.backend { color: var(--backend); }
+  .step-num.db { color: var(--db); }
+  .step-num.ext { color: var(--ext); }
+  .step-num.decision { color: var(--decision); }
+  .step-title { font-weight: 600; font-size: .94rem; margin: 0 0 4px; }
+  .step-title .tag {
+    font-family: var(--font-mono); font-size: .66rem; padding: 2px 7px; border-radius: 3px;
+    margin-left: 8px; vertical-align: 1px; text-transform: uppercase; letter-spacing: .04em;
+  }
+  .tag.gateway { color: var(--gateway); background: var(--gateway-bg); }
+  .tag.backend { color: var(--backend); background: var(--backend-bg); }
+  .tag.db { color: var(--db); background: var(--db-bg); }
+  .tag.ext { color: var(--ext); background: var(--ext-bg); }
+  .tag.decision { color: var(--decision); background: var(--decision-bg); }
+  .step-text { font-size: .87rem; line-height: 1.6; color: var(--ink-dim); margin: 0; max-width: 74ch; }
+
+  .footnote { margin-top: 22px; font-family: var(--font-mono); font-size: .72rem; color: var(--ink-dim); opacity: .8; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <p class="eyebrow">Instance 2 of N — per-feature execution trace</p>
+  <h1>New Customer Registration</h1>
+  <p class="dek">
+    Traces exactly what the code does when a customer who isn't fully on file yet — missing any of
+    phone, full name, NRIC or email — messages the bot. Unlike a single enquiry, this is a
+    <strong>multi-turn loop</strong>: the system saves whatever a message contains, asks only for
+    what's still missing, and the customer's next reply re-enters the same flow — until all four
+    details are captured and the account is confirmed.
+  </p>
+
+  <div class="sample-box">
+    <span class="sample">First contact: <b>"Hi, interested in the dental course"</b></span>
+    <span class="sample">Partial, free text: <b>"I'm Tan Wei Ling, S1234567A"</b></span>
+    <span class="sample">Full shortcut: <b>91234567|Tan Wei Ling|S1234567A|wl@email.com</b></span>
+  </div>
+
+  <div class="legend">
+    <div class="legend-item"><span class="swatch" style="background:var(--gateway)"></span>Gateway (whatsapp-server)</div>
+    <div class="legend-item"><span class="swatch" style="background:var(--backend)"></span>Backend logic</div>
+    <div class="legend-item"><span class="swatch" style="background:var(--db)"></span>PostgreSQL read/write</div>
+    <div class="legend-item"><span class="swatch" style="background:var(--ext)"></span>OpenAI (external LLM)</div>
+    <div class="legend-item"><span class="swatch diamond" style="background:var(--decision)"></span>Decision / branch</div>
+  </div>
+
+  <figure class="diagram-frame">
+    <svg viewBox="0 0 900 1560" role="img" aria-label="Flowchart: a customer's message is scanned for phone, name, NRIC and email either via an exact piped shortcut or via regex plus a name-only AI fallback; a phone-collision check and a still-missing check each branch to their own reply, and an incomplete registration loops back to the top on the customer's next message, while a complete one is finalized and delivered as a welcome reply.">
+      <defs>
+        <marker id="arrow2" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--ink-dim)"></path>
+        </marker>
+      </defs>
+
+      <!-- spine connectors -->
+      <g fill="none" stroke="var(--ink-dim)" stroke-width="1.75" marker-end="url(#arrow2)">
+        <line x1="450" y1="67"   x2="450" y2="106"></line>
+        <line x1="450" y1="162"  x2="450" y2="201"></line>
+        <line x1="450" y1="257"  x2="450" y2="296"></line>
+        <line x1="450" y1="352"  x2="450" y2="388"></line>
+        <line x1="340" y1="430"  x2="197" y2="516"></line>
+        <line x1="560" y1="430"  x2="703" y2="516"></line>
+        <line x1="190" y1="572"  x2="437" y2="616"></line>
+        <line x1="710" y1="572"  x2="463" y2="616"></line>
+        <line x1="450" y1="672"  x2="450" y2="706"></line>
+        <line x1="450" y1="762"  x2="450" y2="799"></line>
+        <line x1="450" y1="885"  x2="450" y2="923"></line>
+        <line x1="560" y1="965"  x2="598" y2="965"></line>
+        <line x1="450" y1="1005" x2="450" y2="1048"></line>
+        <line x1="340" y1="1090" x2="332" y2="1090"></line>
+        <line x1="450" y1="1130" x2="450" y2="1176"></line>
+        <line x1="450" y1="1232" x2="450" y2="1266"></line>
+        <line x1="450" y1="1322" x2="450" y2="1371"></line>
+        <line x1="450" y1="1427" x2="450" y2="1471"></line>
+      </g>
+      <path d="M730,992 L730,1400 L602,1400" fill="none" stroke="var(--ink-dim)" stroke-width="1.75" marker-end="url(#arrow2)"></path>
+      <path d="M180,1117 L180,1400 L298,1400" fill="none" stroke="var(--ink-dim)" stroke-width="1.75" marker-end="url(#arrow2)"></path>
+      <path d="M100,1063 C 15,900 15,250 298,150" fill="none" stroke="var(--ink-dim)" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#arrow2)"></path>
+
+      <!-- branch edge labels -->
+      <g font-size="11" fill="var(--ink-dim)" text-anchor="middle">
+        <text x="240" y="478">shortcut</text>
+        <text x="665" y="478">free text</text>
+        <text x="600" y="950">yes</text>
+        <text x="472" y="1020">no</text>
+        <text x="300" y="1075">yes</text>
+        <text x="472" y="1155">no</text>
+      </g>
+      <text font-size="10" fill="var(--ink-dim)" text-anchor="middle" transform="rotate(-90 34 700)">next message loops back here</text>
+
+      <!-- N1 start pill -->
+      <rect x="300" y="13" width="300" height="54" rx="27" fill="var(--card)" stroke="var(--ink-dim)" stroke-width="1.5"></rect>
+      <text x="450" y="34" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">Customer messages WhatsApp</text>
+      <text x="450" y="50" text-anchor="middle" font-size="10" fill="var(--ink-dim)">no details yet, or only some — any order</text>
+
+      <!-- N2 gateway -->
+      <rect x="300" y="108" width="300" height="54" rx="8" fill="var(--card)" stroke="var(--gateway)" stroke-width="1.5"></rect>
+      <text x="450" y="130" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">Gateway — whatsapp-server</text>
+      <text x="450" y="146" text-anchor="middle" font-size="10" fill="var(--ink-dim)">POST /webhook/whatsapp</text>
+
+      <!-- N3 orchestrator -->
+      <rect x="300" y="203" width="300" height="54" rx="8" fill="var(--card)" stroke="var(--backend)" stroke-width="1.5"></rect>
+      <text x="450" y="225" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">Orchestrator</text>
+      <text x="450" y="241" text-anchor="middle" font-size="10" fill="var(--ink-dim)">get_or_create_customer() — resolve record</text>
+
+      <!-- N4 registration gate entry -->
+      <rect x="300" y="298" width="300" height="54" rx="8" fill="var(--card)" stroke="var(--backend)" stroke-width="1.5"></rect>
+      <text x="450" y="320" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">Registration Gate</text>
+      <text x="450" y="336" text-anchor="middle" font-size="10" fill="var(--ink-dim)">_advance_registration()</text>
+
+      <!-- D1 decision -->
+      <polygon points="450,390 560,430 450,470 340,430" fill="var(--card)" stroke="var(--decision)" stroke-width="1.5"></polygon>
+      <text x="450" y="426" text-anchor="middle" font-size="11" fill="var(--ink)">shortcut</text>
+      <text x="450" y="440" text-anchor="middle" font-size="11" fill="var(--ink)">format?</text>
+
+      <!-- N5L piped -->
+      <rect x="40" y="518" width="300" height="54" rx="8" fill="var(--card)" stroke="var(--backend)" stroke-width="1.5"></rect>
+      <text x="190" y="540" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">Use the exact values</text>
+      <text x="190" y="556" text-anchor="middle" font-size="10" fill="var(--ink-dim)">phone|name|NRIC|email — deterministic</text>
+
+      <!-- N5R free text -->
+      <rect x="560" y="518" width="300" height="54" rx="8" fill="var(--card)" stroke="var(--backend)" stroke-width="1.5"></rect>
+      <text x="710" y="540" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">Read the free text</text>
+      <text x="710" y="556" text-anchor="middle" font-size="10" fill="var(--ink-dim)">regex only — name via AI, last resort</text>
+
+      <!-- N6 merge -->
+      <rect x="300" y="618" width="300" height="54" rx="8" fill="var(--card)" stroke="var(--backend)" stroke-width="1.5"></rect>
+      <text x="450" y="640" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">New values combined</text>
+      <text x="450" y="656" text-anchor="middle" font-size="10" fill="var(--ink-dim)">some fields may still be blank</text>
+
+      <!-- N7 save -->
+      <rect x="300" y="708" width="300" height="54" rx="8" fill="var(--card)" stroke="var(--backend)" stroke-width="1.5"></rect>
+      <text x="450" y="730" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">Save newly-captured fields</text>
+      <text x="450" y="746" text-anchor="middle" font-size="10" fill="var(--ink-dim)">only what's not already on file</text>
+
+      <!-- DB cylinder -->
+      <rect x="340" y="815" width="220" height="56" fill="var(--card)"></rect>
+      <line x1="340" y1="815" x2="340" y2="871" stroke="var(--db)" stroke-width="1.5"></line>
+      <line x1="560" y1="815" x2="560" y2="871" stroke="var(--db)" stroke-width="1.5"></line>
+      <ellipse cx="450" cy="871" rx="110" ry="14" fill="var(--card)" stroke="var(--db)" stroke-width="1.5"></ellipse>
+      <ellipse cx="450" cy="815" rx="110" ry="14" fill="var(--card)" stroke="var(--db)" stroke-width="1.5"></ellipse>
+      <text x="450" y="845" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">customers table</text>
+      <text x="450" y="861" text-anchor="middle" font-size="10" fill="var(--ink-dim)">incremental UPDATE</text>
+
+      <!-- D2 decision -->
+      <polygon points="450,925 560,965 450,1005 340,965" fill="var(--card)" stroke="var(--decision)" stroke-width="1.5"></polygon>
+      <text x="450" y="960" text-anchor="middle" font-size="11" fill="var(--ink)">phone already</text>
+      <text x="450" y="974" text-anchor="middle" font-size="11" fill="var(--ink)">used elsewhere?</text>
+
+      <!-- N8 recheck reply -->
+      <rect x="600" y="938" width="260" height="54" rx="8" fill="var(--card)" stroke="var(--backend)" stroke-width="1.5"></rect>
+      <text x="730" y="960" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">Reply: please recheck</text>
+      <text x="730" y="976" text-anchor="middle" font-size="10" fill="var(--ink-dim)">phone already linked elsewhere</text>
+
+      <!-- D3 decision -->
+      <polygon points="450,1050 560,1090 450,1130 340,1090" fill="var(--card)" stroke="var(--decision)" stroke-width="1.5"></polygon>
+      <text x="450" y="1085" text-anchor="middle" font-size="11" fill="var(--ink)">still missing</text>
+      <text x="450" y="1099" text-anchor="middle" font-size="11" fill="var(--ink)">a field?</text>
+
+      <!-- N9 ask missing -->
+      <rect x="30" y="1063" width="300" height="54" rx="8" fill="var(--card)" stroke="var(--backend)" stroke-width="1.5"></rect>
+      <text x="180" y="1085" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">Ask for what's missing</text>
+      <text x="180" y="1101" text-anchor="middle" font-size="10" fill="var(--ink-dim)">plain English, only the gaps</text>
+
+      <!-- N10 finalize -->
+      <rect x="300" y="1178" width="300" height="54" rx="8" fill="var(--card)" stroke="var(--backend)" stroke-width="1.5"></rect>
+      <text x="450" y="1200" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">Finalize registration</text>
+      <text x="450" y="1216" text-anchor="middle" font-size="10" fill="var(--ink-dim)">repo.register_customer()</text>
+
+      <!-- N11 welcome reply -->
+      <rect x="300" y="1268" width="300" height="54" rx="8" fill="var(--card)" stroke="var(--backend)" stroke-width="1.5"></rect>
+      <text x="450" y="1290" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">Reply: you're registered</text>
+      <text x="450" y="1306" text-anchor="middle" font-size="10" fill="var(--ink-dim)">welcome + suggested next steps</text>
+
+      <!-- N12 gateway delivery -->
+      <rect x="300" y="1373" width="300" height="54" rx="8" fill="var(--card)" stroke="var(--gateway)" stroke-width="1.5"></rect>
+      <text x="450" y="1395" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">Gateway delivery</text>
+      <text x="450" y="1411" text-anchor="middle" font-size="10" fill="var(--ink-dim)">send_whatsapp() → POST /send-reply</text>
+
+      <!-- N13 end pill -->
+      <rect x="300" y="1473" width="300" height="54" rx="27" fill="var(--card)" stroke="var(--ink-dim)" stroke-width="1.5"></rect>
+      <text x="450" y="1505" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">Customer sees the reply</text>
+    </svg>
+    <figcaption>
+      Three distinct customer-facing outcomes come out of one gate: a duplicate-phone warning, a
+      "here's what I still need" prompt that loops back on the customer's next message (dashed line),
+      or a finalized welcome. Sensitive identifiers (phone, NRIC, email) are always extracted by exact
+      pattern-matching; the only place AI ever touches this data is guessing a person's <em>name</em>
+      from casual phrasing, and only as a last resort.
+    </figcaption>
+  </figure>
+
+  <div class="callout">
+    <h3>Where does Agent A fit in?</h3>
+    Nowhere in this diagram — deliberately. Registration is handled entirely by the Orchestrator's own
+    <code>_advance_registration()</code> gate, which runs <strong>before</strong> <code>router.route()</code>
+    and therefore before Agent A (or Module B/C) is ever invoked. A customer only ever reaches Agent A
+    once they're a verified record with all four fields confirmed — see
+    <a href="01_course_schedule_enquiry.html">Instance 01 — Course &amp; Schedule Enquiry</a> for what
+    happens on every message after this gate is cleared.
+  </div>
+
+  <p class="eyebrow">For stakeholders — process, data &amp; automation value</p>
+  <h2 style="margin-top:0;">What happens at each step, and what it replaces</h2>
+  <p class="dek">
+    A stakeholder view of the same journey: what happens, what information it needs, what it produces,
+    and what running it automatically buys the business over a person manually processing sign-up forms.
+  </p>
+
+  <div class="agent-profile">
+    <div class="agent-avatar">G</div>
+    <div>
+      <p class="agent-role">The Registration Gate — not an AI agent</p>
+      <p class="agent-sub">
+        A deterministic checkpoint every customer passes through exactly once. It reads structured data
+        with strict rules, not judgement — the one narrow exception is a single-purpose AI call used
+        only to guess a person's <em>name</em> from casual phrasing, never phone, NRIC, or email.
+      </p>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table class="process-table">
+      <thead>
+        <tr>
+          <th>Process step</th>
+          <th>Activity</th>
+          <th>Input — data needed</th>
+          <th>Output — data produced</th>
+          <th>Automation value</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="step-name">1 · Customer messages WhatsApp<span class="step-ref">WhatsApp</span></td>
+          <td>A new, or still-incomplete, customer sends a message — with any mix of name, NRIC, phone and email, or none of it yet.</td>
+          <td>—  (customer-initiated)</td>
+          <td>Raw WhatsApp message</td>
+          <td>No sign-up form, no app download — registration happens inside the same chat the customer already opened.</td>
+        </tr>
+        <tr>
+          <td class="step-name gateway">2 · Message is captured<span class="step-ref">Gateway</span></td>
+          <td>The WhatsApp gateway picks up the message the instant it arrives and hands it to the backend.</td>
+          <td>Incoming WhatsApp message event</td>
+          <td>Structured message record (sender + text)</td>
+          <td>100% capture rate — nothing is missed, and nothing needs a person watching a chat window.</td>
+        </tr>
+        <tr>
+          <td class="step-name backend">3 · Customer record is resolved<span class="step-ref">Orchestrator</span></td>
+          <td>System finds this customer's existing record, or creates a blank one, and checks which of the 4 required details are already on file.</td>
+          <td>WhatsApp ID, phone (if the account type supplies it)</td>
+          <td>Customer profile showing what's known so far</td>
+          <td>Nothing is ever asked twice — the system remembers exactly what this customer already gave it, even across separate conversations days apart.</td>
+        </tr>
+        <tr>
+          <td class="step-name decision">4 · Message format is read<span class="step-ref">shortcut?</span></td>
+          <td>System checks whether this message is the exact "phone|name|NRIC|email" shortcut, or should be read as ordinary conversation.</td>
+          <td>Message text</td>
+          <td>Which extraction method to use</td>
+          <td>Staff or repeat users who know the shortcut get instant exact parsing; everyone else can just type normally.</td>
+        </tr>
+        <tr>
+          <td class="step-name backend">5a · Exact values used<span class="step-ref">piped shortcut</span></td>
+          <td>Values are taken directly from the shortcut — no interpretation involved.</td>
+          <td>Piped text</td>
+          <td>Phone, name, NRIC, email</td>
+          <td>Zero ambiguity, zero AI cost, for anyone who already knows the format.</td>
+        </tr>
+        <tr>
+          <td class="step-name backend">5b · Free text is read<span class="step-ref">regex + AI fallback</span></td>
+          <td>The email, NRIC and phone number are picked out using strict pattern-matching rules — never AI. An AI is asked to guess only the person's name, and only when pattern-matching genuinely can't find one.</td>
+          <td>Free-text message</td>
+          <td>Whichever of phone/name/NRIC/email could be confidently identified</td>
+          <td>The trust-critical step: sensitive identifiers are never left to an AI's judgement, only extracted by exact rules. AI help is reserved for the one low-risk field where a wrong guess just means the bot asks again.</td>
+        </tr>
+        <tr>
+          <td class="step-name backend">6 · Progress is saved<span class="step-ref">incremental save</span></td>
+          <td>Whatever's new in this message is saved immediately; anything already on file from a previous message is left untouched.</td>
+          <td>Newly found values + existing profile</td>
+          <td>Updated customer record</td>
+          <td>The customer can give their details across several messages, in any order, over any span of time, and never has to repeat what they've already said.</td>
+        </tr>
+        <tr>
+          <td class="step-name db">7 · Stored in the customer database<span class="step-ref">customers table</span></td>
+          <td>The system of record for every customer, registered or not.</td>
+          <td>Field updates</td>
+          <td>Stored profile</td>
+          <td>Same database staff use — one source of truth, no spreadsheet re-entry, no sync delay.</td>
+        </tr>
+        <tr>
+          <td class="step-name decision">8 · Duplicate-phone check<span class="step-ref">collision guard</span></td>
+          <td>Before accepting a phone number, the system confirms it isn't already registered to a different WhatsApp account. If it is, the customer is asked — in the same reply — to double-check the number.</td>
+          <td>Phone number</td>
+          <td>Pass, or a "please recheck" reply</td>
+          <td>Prevents one customer's enrollment or payment history from ever being mixed up with someone else's — caught immediately in-chat, not as a support ticket later.</td>
+        </tr>
+        <tr>
+          <td class="step-name decision">9 · Completeness check<span class="step-ref">still missing?</span></td>
+          <td>System recomputes which of the 4 required fields, if any, are still blank — after every single message.</td>
+          <td>Current customer record</td>
+          <td>List of what's still needed (may be empty)</td>
+          <td>The moment the last detail arrives, mid-conversation, nothing further is needed from the customer — there's no separate review step waiting on staff.</td>
+        </tr>
+        <tr>
+          <td class="step-name backend">10 · Ask for what's missing<span class="step-ref">loops to step 1</span></td>
+          <td>In plain conversational language, the bot asks only for the specific details still needed — never the ones already given.</td>
+          <td>List of missing fields</td>
+          <td>WhatsApp reply; conversation stays open</td>
+          <td>No rigid multi-field form to fill in one sitting — the bot patiently continues the same conversation, however many messages it takes.</td>
+        </tr>
+        <tr>
+          <td class="step-name backend">11 · Registration is finalized<span class="step-ref">register_customer()</span></td>
+          <td>The moment every required detail is in, the profile is committed as an officially registered participant and a welcome reply is prepared.</td>
+          <td>Complete profile (phone, name, NRIC, email)</td>
+          <td>Registered customer record + welcome message</td>
+          <td>No separate "submit" step — registration completes automatically inside the conversation, and the customer can immediately ask about courses, fees, or enrol.</td>
+        </tr>
+        <tr>
+          <td class="step-name gateway">12 · Reply is delivered<span class="step-ref">Gateway</span></td>
+          <td>The finished reply — recheck request, missing-details prompt, or welcome — is sent back down the same WhatsApp conversation.</td>
+          <td>Reply text</td>
+          <td>Delivered WhatsApp message</td>
+          <td class="automation">Seconds from the last detail given to a working, registered account — any hour, any volume, no staff involved.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="eyebrow" style="margin-top:44px;">For engineers — implementation trace</p>
+  <h2 style="margin-top:0;">Same journey, at file-and-function level</h2>
+  <p class="dek">The same path with exact code references, for anyone implementing or auditing it. Covers the branch where the customer is not yet fully registered — an already-registered customer's message skips straight past this gate to <code>router.route()</code> (see Instance 01).</p>
+
+  <h2><span class="step-scope">Stage 1 — Arrival &amp; lookup</span>Getting the message to the registration gate</h2>
+  <div class="steps">
+    <div class="step">
+      <span class="step-num gateway">01</span>
+      <div><p class="step-title">Message received &amp; forwarded <span class="tag gateway">gateway</span></p>
+      <p class="step-text"><code>whatsapp-server</code> forwards the raw message via <code>POST /webhook/whatsapp</code>, same as every other inbound message.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-num backend">02</span>
+      <div><p class="step-title">orchestrator.handle_inbound(payload) <span class="tag backend">backend</span></p>
+      <p class="step-text"><code>app/orchestrator.py</code> — parses the sender, then <code>repo.get_or_create_customer(whatsapp_id)</code> atomically upserts a record. For a <code>@c.us</code> account whose phone the gateway already supplied, <code>repo.set_customer_phone()</code> auto-confirms it here if not already confirmed.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-num decision">03</span>
+      <div><p class="step-title">_is_registered(customer)? <span class="tag decision">decision</span></p>
+      <p class="step-text">True only when <code>phone_confirmed</code>, <code>full_name</code>, <code>nric</code> and <code>email</code> are all set. This diagram covers the <strong>False</strong> branch; True skips straight to <code>router.route()</code> (Instance 01).</p></div>
+    </div>
+  </div>
+
+  <h2><span class="step-scope">Stage 2 — Extracting whatever this message contains</span>_advance_registration() and its two extraction paths</h2>
+  <div class="steps">
+    <div class="step">
+      <span class="step-num backend">04</span>
+      <div><p class="step-title">_advance_registration(whatsapp_id, body, customer) <span class="tag backend">backend</span></p>
+      <p class="step-text">Entry point for the whole gate; calls <code>_extract_registration_fields(body, customer)</code>.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-num decision">05</span>
+      <div><p class="step-title">_parse_piped_reply(body, customer) <span class="tag decision">decision</span></p>
+      <p class="step-text">Checks for the exact shortcut: 4 pipe-separated parts (<code>phone|name|NRIC|email</code>), or 3 parts (<code>name|NRIC|email</code>) if phone is already confirmed. Validates the phone digit-count and that the email contains "@" before accepting. On a match, returns immediately — free-text parsing never runs.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-num backend">06</span>
+      <div><p class="step-title">_parse_free_text_reply(body) <span class="tag backend">backend</span></p>
+      <p class="step-text">On no shortcut match: <code>_EMAIL_RE</code>, then <code>_NRIC_RE</code>, then <code>_PHONE_TOKEN_RE</code> each find and strip their match from the remaining text in turn. <code>_is_valid_phone()</code> rejects 15-digit WhatsApp LIDs so one is never mistaken for a phone number.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-num ext">07</span>
+      <div><p class="step-title">Name resolution <span class="tag ext">OpenAI (fallback only)</span></p>
+      <p class="step-text">Whatever's left after stripping known tokens and filler words (<code>_NAME_FILLER_RE</code>) goes through <code>_clean_name_remainder()</code> — must look like a real name (starts with a letter, 1–5 words, ≤60 chars). Only if that fails, <code>OPENAI_API_KEY</code> is set, <em>and</em> non-filler text remains does <code>_llm_extract_name()</code> run: a CrewAI agent scoped to name-extraction only, explicitly told to ignore phone/NRIC/email.</p></div>
+    </div>
+  </div>
+
+  <h2><span class="step-scope">Stage 3 — Saving progress &amp; the two guard checks</span>Persisting fields, catching duplicates, checking completeness</h2>
+  <div class="steps">
+    <div class="step">
+      <span class="step-num db">08</span>
+      <div><p class="step-title">repo.set_customer_phone(whatsapp_id, phone) <span class="tag db">database</span></p>
+      <p class="step-text">Saved first, and only if newly found and not already confirmed. Raises <code>ValueError</code> if that phone already belongs to a different <code>whatsapp_id</code> → <code>status = "phone_collision"</code>, and the turn ends here with the recheck reply.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-num db">09</span>
+      <div><p class="step-title">repo.update_customer(whatsapp_id, **updates) <span class="tag db">database</span></p>
+      <p class="step-text">Any newly found <code>full_name</code>/<code>nric</code>/<code>email</code> not already on file is saved. A field already set from an earlier message is never overwritten.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-num decision">10</span>
+      <div><p class="step-title">_missing_fields(customer) <span class="tag decision">decision</span></p>
+      <p class="step-text">Recomputed against the just-updated record: <code>phone_confirmed</code>, <code>full_name</code>, <code>nric</code>, <code>email</code>.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-num backend">11a</span>
+      <div><p class="step-title">Incomplete → _registration_prompt(missing, has_progress) <span class="tag backend">backend</span></p>
+      <p class="step-text">First-contact wording ("Welcome to Q&amp;M Dental Training! 👋…") if nothing was known before this message; "Thanks! I still need…" if some fields were already on file. Reply is returned and the turn ends — the customer's next message re-enters this flow at step 02.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-num backend">11b</span>
+      <div><p class="step-title">Complete → repo.register_customer(...) <span class="tag backend">backend</span></p>
+      <p class="step-text">Commits the finalized record. Can still raise <code>ValueError</code> here (a last-moment collision) → <code>phone_collision</code>. Otherwise <code>status = "complete"</code> and the reply is <code>_REG_CONFIRM</code> — a welcome message inviting the customer to ask about courses, fees, SkillsFuture, or enrol.</p></div>
+    </div>
+  </div>
+
+  <h2><span class="step-scope">Stage 4 — Outbound</span>Delivering the reply</h2>
+  <div class="steps">
+    <div class="step">
+      <span class="step-num gateway">12</span>
+      <div><p class="step-title">whatsapp_client.send_whatsapp(routing_id, reply) <span class="tag gateway">gateway</span></p>
+      <p class="step-text">Same delivery path as every other reply: <code>POST /send-reply</code> to <code>whatsapp-server</code>, back to the same WhatsApp chat. Note: unlike a normal enquiry turn, <code>context.set_message()</code> and <code>router.route()</code> are never reached while registration is incomplete — chat memory for this turn is still recorded, but no module (A/B/C) runs.</p></div>
+    </div>
+  </div>
+
+  <div class="callout">
+    <strong>Why the AI boundary matters:</strong> every identifier that could cause real harm if
+    guessed wrong — a phone number, an NRIC, an email address — is only ever accepted from an exact
+    pattern match or an exact shortcut. The single point where AI is allowed to infer something is a
+    person's name, the one field where a wrong guess costs nothing worse than the bot asking again.
+    That boundary is enforced in code (<code>_llm_extract_name()</code> is never given the option to
+    return a phone, NRIC, or email), not just by convention.
+  </div>
+
+  <p class="footnote">Q&amp;M Dental Group — WhatsApp Enquiry &amp; Enrollment System · source: app/orchestrator.py, app/repositories.py</p>
+
+</div>
+</body>
+</html>

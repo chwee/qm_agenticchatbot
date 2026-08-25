@@ -1,0 +1,484 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Flow — Course Cancellation &amp; Credit Note (Admin Portal)</title>
+<style>
+  :root {
+    --paper: #F5F2EA;
+    --card: #FFFFFF;
+    --card-alt: #FBF9F3;
+    --ink: #1E2430;
+    --ink-dim: #5B6270;
+    --line: #DED7C4;
+    --line-strong: #C9C0A8;
+
+    --gateway: #1F7A5C;   --gateway-bg: rgba(31,122,92,0.09);
+    --backend: #35478C;   --backend-bg: rgba(53,71,140,0.08);
+    --db: #7C4A9E;        --db-bg: rgba(124,74,158,0.08);
+    --ext: #8A6A2F;       --ext-bg: rgba(150,121,74,0.10);
+    --decision: #A3432E;  --decision-bg: rgba(163,67,46,0.08);
+    --staff: #4C6178;     --staff-bg: rgba(76,97,120,0.10);
+
+    --font-display: -apple-system, BlinkMacSystemFont, "Segoe UI Semibold", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    --font-mono: ui-monospace, "Cascadia Code", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #12151B; --card: #181C24; --card-alt: #1E2330;
+      --ink: #E9E6DC; --ink-dim: #9CA0AC;
+      --line: #2B303C; --line-strong: #3A4050;
+      --gateway: #46CB9B; --gateway-bg: rgba(70,203,155,0.10);
+      --backend: #93A2F2; --backend-bg: rgba(147,162,242,0.10);
+      --db: #D19DF0; --db-bg: rgba(209,157,240,0.10);
+      --ext: #E4C27E; --ext-bg: rgba(228,194,126,0.10);
+      --decision: #E28870; --decision-bg: rgba(226,136,112,0.10);
+      --staff: #9AB2C9;   --staff-bg: rgba(154,178,201,0.12);
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--font-body); -webkit-font-smoothing: antialiased; }
+  .page { max-width: 980px; margin: 0 auto; padding: 48px 24px 90px; }
+
+  .eyebrow { font-family: var(--font-mono); font-size: .72rem; letter-spacing: .16em; text-transform: uppercase; color: var(--backend); margin: 0 0 10px; }
+  h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(1.5rem, 1.1rem + 1.6vw, 2.05rem); letter-spacing: -0.01em; line-height: 1.15; text-wrap: balance; margin: 0 0 14px; }
+  .dek { font-size: .98rem; line-height: 1.6; color: var(--ink-dim); max-width: 68ch; margin: 0 0 22px; }
+  .dek code, p code, li code, td code { font-family: var(--font-mono); font-size: .87em; color: var(--ink); background: var(--card-alt); border: 1px solid var(--line); border-radius: 3px; padding: 1px 5px; }
+
+  .sample-box { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 30px; }
+  .sample {
+    font-family: var(--font-mono); font-size: .8rem; padding: 8px 12px;
+    border: 1px solid var(--line); border-radius: 5px; background: var(--card-alt); color: var(--ink-dim);
+  }
+  .sample b { color: var(--ink); font-weight: 600; }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 10px 20px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 6px; background: var(--card-alt); margin-bottom: 12px; }
+  .legend-item { display: flex; align-items: center; gap: 8px; font-family: var(--font-mono); font-size: .74rem; color: var(--ink-dim); }
+  .swatch { width: 10px; height: 10px; border-radius: 2px; flex: none; }
+  .swatch.diamond { border-radius: 0; transform: rotate(45deg); }
+  .swatch.dashed { background: transparent; border: 1.5px dashed var(--ink-dim); }
+  .legend-note { font-size: .78rem; color: var(--ink-dim); margin: 0 0 34px; font-style: italic; }
+
+  .diagram-frame {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--card);
+    padding: 18px;
+    margin-bottom: 12px;
+    overflow-x: auto;
+  }
+  .diagram-frame svg { display: block; margin: 0 auto; width: 100%; max-width: 640px; height: auto; }
+  figure.diagram-frame { margin: 0 0 12px; }
+  figcaption {
+    font-size: .84rem; line-height: 1.55; color: var(--ink-dim);
+    max-width: 66ch; margin: 0 0 28px;
+  }
+
+  .callout {
+    margin: 0 0 34px; padding: 16px 18px; border: 1px solid var(--line-strong); border-radius: 6px;
+    background: var(--card-alt); font-size: .88rem; line-height: 1.6; color: var(--ink-dim);
+  }
+  .callout strong { color: var(--ink); }
+  .callout h3 { margin: 0 0 8px; font-family: var(--font-display); font-size: .98rem; color: var(--ink); }
+  .callout ul { margin: 8px 0 0; padding-left: 20px; }
+  .callout li { margin: 4px 0; }
+
+  .agent-profile {
+    display: flex; align-items: center; gap: 16px;
+    padding: 16px 18px; border: 1px solid var(--line); border-radius: 8px;
+    background: var(--staff-bg); margin: 4px 0 28px;
+  }
+  .agent-avatar {
+    width: 46px; height: 46px; border-radius: 10px; flex: none;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--staff); color: var(--card);
+    font-family: var(--font-display); font-weight: 700; font-size: 1.15rem;
+  }
+  .agent-role { font-weight: 700; font-size: .96rem; margin: 0 0 3px; }
+  .agent-sub { font-size: .83rem; color: var(--ink-dim); margin: 0; line-height: 1.5; }
+  .agent-sub code { font-family: var(--font-mono); font-size: .82em; }
+
+  .table-wrap {
+    overflow-x: auto; margin: 0 0 16px;
+    border: 1px solid var(--line); border-radius: 8px;
+  }
+  .process-table { border-collapse: collapse; width: 100%; min-width: 1000px; font-size: .83rem; }
+  .process-table th, .process-table td { padding: 12px 14px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); }
+  .process-table thead th {
+    font-family: var(--font-mono); font-size: .66rem; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--ink-dim); background: var(--card-alt); border-bottom: 1px solid var(--line-strong); white-space: nowrap;
+  }
+  .process-table tbody tr:last-child td { border-bottom: none; }
+  .process-table td { color: var(--ink-dim); line-height: 1.55; }
+  .process-table td.step-name { font-weight: 600; color: var(--ink); border-left: 3px solid var(--line-strong); }
+  .process-table td.step-name .step-ref { display: block; font-family: var(--font-mono); font-weight: 400; font-size: .68rem; color: var(--ink-dim); margin-top: 2px; }
+  .process-table td.step-name.staff { border-left-color: var(--staff); }
+  .process-table td.step-name.backend { border-left-color: var(--backend); }
+  .process-table td.step-name.db { border-left-color: var(--db); }
+  .process-table td.step-name.decision { border-left-color: var(--decision); }
+  .process-table td.automation { color: var(--ink); }
+
+  h2 { font-family: var(--font-display); font-size: 1.2rem; font-weight: 700; margin: 44px 0 6px; }
+  h2 .step-scope { font-family: var(--font-mono); font-size: .7rem; color: var(--ink-dim); font-weight: 400; text-transform: uppercase; letter-spacing: .08em; display: block; margin-bottom: 6px; }
+
+  .steps { display: flex; flex-direction: column; gap: 0; border-top: 1px solid var(--line); margin-top: 18px; }
+  .step { display: grid; grid-template-columns: 34px 1fr; column-gap: 14px; padding: 14px 0; border-bottom: 1px dashed var(--line); }
+  .step-num { font-family: var(--font-mono); font-size: .74rem; padding-top: 3px; }
+  .step-num.staff { color: var(--staff); }
+  .step-num.backend { color: var(--backend); }
+  .step-num.db { color: var(--db); }
+  .step-num.ext { color: var(--ext); }
+  .step-num.decision { color: var(--decision); }
+  .step-title { font-weight: 600; font-size: .94rem; margin: 0 0 4px; }
+  .step-title .tag {
+    font-family: var(--font-mono); font-size: .66rem; padding: 2px 7px; border-radius: 3px;
+    margin-left: 8px; vertical-align: 1px; text-transform: uppercase; letter-spacing: .04em;
+  }
+  .tag.staff { color: var(--staff); background: var(--staff-bg); }
+  .tag.backend { color: var(--backend); background: var(--backend-bg); }
+  .tag.db { color: var(--db); background: var(--db-bg); }
+  .tag.ext { color: var(--ext); background: var(--ext-bg); }
+  .tag.decision { color: var(--decision); background: var(--decision-bg); }
+  .step-text { font-size: .87rem; line-height: 1.6; color: var(--ink-dim); margin: 0; max-width: 74ch; }
+
+  .footnote { margin-top: 22px; font-family: var(--font-mono); font-size: .72rem; color: var(--ink-dim); opacity: .8; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <p class="eyebrow">Instance 4 of N — per-feature execution trace</p>
+  <h1>Course Cancellation &amp; Credit Note</h1>
+  <p class="dek">
+    Traces what happens when an already-enrolled customer's course is cancelled. Unlike Instances 01–03,
+    this process has <strong>no WhatsApp path and no AI agent</strong> — it is entered and driven entirely
+    by staff through the accountant Admin Portal. It's included here in the same format because it's the
+    process that actually reverses what
+    <a href="03_course_enrollment.html">Instance 03 — Course Enrollment</a> created: it un-reserves the
+    seat, cancels the enrollment, and issues the customer's refund document.
+  </p>
+
+  <div class="sample-box">
+    <span class="sample">Staff requests: <b>POST /admin/credit-notes/request?enrollment_id=482&amp;reason=Change of plans</b></span>
+    <span class="sample">Staff approves: <b>POST /admin/credit-notes/17/approve</b></span>
+  </div>
+
+  <div class="legend">
+    <div class="legend-item"><span class="swatch" style="background:var(--staff)"></span>Staff / Admin Portal</div>
+    <div class="legend-item"><span class="swatch" style="background:var(--backend)"></span>Backend logic</div>
+    <div class="legend-item"><span class="swatch" style="background:var(--db)"></span>PostgreSQL read/write</div>
+    <div class="legend-item"><span class="swatch diamond" style="background:var(--decision)"></span>Decision / branch</div>
+    <div class="legend-item"><span class="swatch dashed"></span>Outside the system, or not implemented</div>
+  </div>
+  <p class="legend-note">No gateway/WhatsApp and no OpenAI swatches this time — neither appears anywhere in this process. See the callout below.</p>
+
+  <figure class="diagram-frame">
+    <svg viewBox="0 0 900 1400" role="img" aria-label="Flowchart: staff request a credit note for an enrollment, which immediately cancels it and releases the seat and notifies accounts internally; later, a separate staff approval finalizes the credit note, generates its PDF, and emails it to the customer — the customer's only contact in the entire process.">
+      <defs>
+        <marker id="arrow4" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--ink-dim)"></path>
+        </marker>
+      </defs>
+
+      <!-- spine connectors -->
+      <g fill="none" stroke="var(--ink-dim)" stroke-width="1.75" marker-end="url(#arrow4)">
+        <line x1="450" y1="67"   x2="450" y2="111"></line>
+        <line x1="450" y1="167"  x2="450" y2="206"></line>
+        <line x1="450" y1="262"  x2="450" y2="298"></line>
+        <line x1="450" y1="380"  x2="450" y2="421"></line>
+        <line x1="560" y1="340"  x2="598" y2="340"></line>
+        <line x1="450" y1="477"  x2="450" y2="524"></line>
+        <line x1="450" y1="610"  x2="450" y2="661"></line>
+        <line x1="450" y1="890"  x2="450" y2="956"></line>
+        <line x1="450" y1="1012" x2="450" y2="1064"></line>
+        <line x1="450" y1="1150" x2="450" y2="1191"></line>
+        <line x1="450" y1="1247" x2="450" y2="1281"></line>
+      </g>
+
+      <!-- branch edge labels -->
+      <g font-size="11" fill="var(--ink-dim)" text-anchor="middle">
+        <text x="450" y="405">no</text>
+        <text x="600" y="330">yes</text>
+      </g>
+
+      <!-- N0 external start (dashed, outside system) -->
+      <rect x="300" y="13" width="300" height="54" rx="8" fill="var(--card)" stroke="var(--ink-dim)" stroke-width="1.5" stroke-dasharray="5 4"></rect>
+      <text x="450" y="34" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">Customer asks to cancel</text>
+      <text x="450" y="50" text-anchor="middle" font-size="10" fill="var(--ink-dim)">outside this system — phone, email, in person</text>
+
+      <!-- N1 admin auth -->
+      <rect x="300" y="113" width="300" height="54" rx="8" fill="var(--card)" stroke="var(--staff)" stroke-width="1.5"></rect>
+      <text x="450" y="135" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">Staff opens the Admin Portal</text>
+      <text x="450" y="151" text-anchor="middle" font-size="10" fill="var(--ink-dim)">HTTP Basic Auth — /admin/</text>
+
+      <!-- N2 request submitted -->
+      <rect x="300" y="208" width="300" height="54" rx="8" fill="var(--card)" stroke="var(--staff)" stroke-width="1.5"></rect>
+      <text x="450" y="230" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">Staff submits the request</text>
+      <text x="450" y="246" text-anchor="middle" font-size="10" fill="var(--ink-dim)">POST /admin/credit-notes/request</text>
+
+      <!-- D1 decision -->
+      <polygon points="450,300 560,340 450,380 340,340" fill="var(--card)" stroke="var(--decision)" stroke-width="1.5"></polygon>
+      <text x="450" y="335" text-anchor="middle" font-size="11" fill="var(--ink)">already</text>
+      <text x="450" y="349" text-anchor="middle" font-size="11" fill="var(--ink)">cancelled?</text>
+
+      <!-- N_err -->
+      <rect x="600" y="313" width="260" height="54" rx="8" fill="var(--card)" stroke="var(--backend)" stroke-width="1.5"></rect>
+      <text x="730" y="335" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">Reply: already cancelled</text>
+      <text x="730" y="351" text-anchor="middle" font-size="10" fill="var(--ink-dim)">staff sees the error — no further action</text>
+
+      <!-- N3 create + cancel -->
+      <rect x="300" y="423" width="300" height="54" rx="8" fill="var(--card)" stroke="var(--backend)" stroke-width="1.5"></rect>
+      <text x="450" y="445" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">Create the credit note &amp; cancel</text>
+      <text x="450" y="461" text-anchor="middle" font-size="10" fill="var(--ink-dim)">tally paid → mint CN number → insert row</text>
+
+      <!-- DB1 cylinder -->
+      <rect x="330" y="526" width="240" height="56" fill="var(--card)"></rect>
+      <line x1="330" y1="526" x2="330" y2="582" stroke="var(--db)" stroke-width="1.5"></line>
+      <line x1="570" y1="526" x2="570" y2="582" stroke="var(--db)" stroke-width="1.5"></line>
+      <ellipse cx="450" cy="582" rx="120" ry="14" fill="var(--card)" stroke="var(--db)" stroke-width="1.5"></ellipse>
+      <ellipse cx="450" cy="526" rx="120" ry="14" fill="var(--card)" stroke="var(--db)" stroke-width="1.5"></ellipse>
+      <text x="450" y="556" text-anchor="middle" font-size="12" font-weight="600" fill="var(--ink)">credit_notes · enrollments · schedules</text>
+      <text x="450" y="572" text-anchor="middle" font-size="10" fill="var(--ink-dim)">status → cancelled · seat released (−1)</text>
+
+      <!-- N5 notify accounts -->
+      <rect x="300" y="663" width="300" height="54" rx="8" fill="var(--card)" stroke="var(--backend)" stroke-width="1.5"></rect>
+      <text x="450" y="685" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">Notify the accounts team</text>
+      <text x="450" y="701" text-anchor="middle" font-size="10" fill="var(--ink-dim)">email → ACCOUNTS_EMAIL, not the customer</text>
+
+      <!-- divider: time passes -->
+      <line x1="150" y1="800" x2="750" y2="800" stroke="var(--line-strong)" stroke-width="1.25" stroke-dasharray="2 6"></line>
+      <text x="450" y="783" text-anchor="middle" font-size="10.5" fill="var(--ink-dim)" font-style="italic">time passes — pending accountant review</text>
+
+      <!-- N6 approve -->
+      <rect x="300" y="863" width="300" height="54" rx="8" fill="var(--card)" stroke="var(--staff)" stroke-width="1.5"></rect>
+      <text x="450" y="885" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">Staff approves the credit note</text>
+      <text x="450" y="901" text-anchor="middle" font-size="10" fill="var(--ink-dim)">POST /admin/credit-notes/{id}/approve</text>
+
+      <!-- N_note annotation (dashed, no arrowhead) -->
+      <rect x="600" y="863" width="260" height="54" rx="8" fill="var(--card)" stroke="var(--ink-dim)" stroke-width="1.25" stroke-dasharray="4 4"></rect>
+      <text x="730" y="885" text-anchor="middle" font-size="12" font-weight="600" fill="var(--ink-dim)">No "reject" in code</text>
+      <text x="730" y="901" text-anchor="middle" font-size="9.5" fill="var(--ink-dim)">schema allows it — no route sets it</text>
+
+      <!-- N7 finalize -->
+      <rect x="300" y="958" width="300" height="54" rx="8" fill="var(--card)" stroke="var(--backend)" stroke-width="1.5"></rect>
+      <text x="450" y="980" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">Finalize &amp; generate the PDF</text>
+      <text x="450" y="996" text-anchor="middle" font-size="10" fill="var(--ink-dim)">status → approved · generate_credit_note_pdf()</text>
+
+      <!-- DB2 cylinder -->
+      <rect x="340" y="1066" width="220" height="50" fill="var(--card)"></rect>
+      <line x1="340" y1="1066" x2="340" y2="1116" stroke="var(--db)" stroke-width="1.5"></line>
+      <line x1="560" y1="1066" x2="560" y2="1116" stroke="var(--db)" stroke-width="1.5"></line>
+      <ellipse cx="450" cy="1116" rx="110" ry="13" fill="var(--card)" stroke="var(--db)" stroke-width="1.5"></ellipse>
+      <ellipse cx="450" cy="1066" rx="110" ry="13" fill="var(--card)" stroke="var(--db)" stroke-width="1.5"></ellipse>
+      <text x="450" y="1094" text-anchor="middle" font-size="12" font-weight="600" fill="var(--ink)">credit_notes</text>
+      <text x="450" y="1108" text-anchor="middle" font-size="10" fill="var(--ink-dim)">UPDATE — status=approved, resolved_at</text>
+
+      <!-- N9 email customer -->
+      <rect x="300" y="1193" width="300" height="54" rx="8" fill="var(--card)" stroke="var(--backend)" stroke-width="1.5"></rect>
+      <text x="450" y="1215" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">Email the customer</text>
+      <text x="450" y="1231" text-anchor="middle" font-size="10" fill="var(--ink-dim)">send_email() — PDF attached, first contact</text>
+
+      <!-- N10 end pill -->
+      <rect x="300" y="1283" width="300" height="54" rx="27" fill="var(--card)" stroke="var(--ink-dim)" stroke-width="1.5"></rect>
+      <text x="450" y="1315" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">Customer receives their credit note</text>
+    </svg>
+    <figcaption>
+      The dashed box at top marks where this process currently begins in practice — outside the system
+      entirely. Everything below the "already cancelled?" gate is staff-driven, deterministic backend
+      code; there is no LLM anywhere in this diagram. The customer is contacted exactly once, at the
+      very last step.
+    </figcaption>
+  </figure>
+
+  <div class="callout">
+    <h3>Two things worth knowing before this looks like a "cancel → approve" workflow</h3>
+    <ul>
+      <li><strong>The cancellation already happened by the time anyone "approves" anything.</strong>
+      Requesting a credit note immediately sets the enrollment to <code>cancelled</code> and frees the
+      seat. The later "approve" step doesn't decide whether to cancel — that's done — it only finalizes
+      the credit note record, generates the PDF, and tells the customer.</li>
+      <li><strong>There's no way to reject a request.</strong> The database schema has a
+      <code>'rejected'</code> status ready for it, but no code path ever sets it — once a cancellation is
+      requested, the only next step wired up is approval.</li>
+    </ul>
+  </div>
+
+  <p class="eyebrow">For stakeholders — process, data &amp; automation value</p>
+  <h2 style="margin-top:0;">What happens at each step, and what it replaces</h2>
+  <p class="dek">
+    A stakeholder view of the same journey. Because this process has no AI step, "automation value" here
+    means something more modest than in Instances 01–03: consistency, an audit trail, and one submission
+    replacing several manual ones — not judgement replacing a person.
+  </p>
+
+  <div class="agent-profile">
+    <div class="agent-avatar">S</div>
+    <div>
+      <p class="agent-role">Process owner: Staff, via the Admin Portal — not an agent</p>
+      <p class="agent-sub">
+        There is no Agent A/B/C equivalent here. A human decides to cancel and a human approves the
+        credit note; the system's job is to make both actions safe, consistent, and fully recorded —
+        not to decide anything on its own.
+      </p>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table class="process-table">
+      <thead>
+        <tr>
+          <th>Process step</th>
+          <th>Activity</th>
+          <th>Input — data needed</th>
+          <th>Output — data produced</th>
+          <th>Automation value</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="step-name">1 · Customer asks to cancel<span class="step-ref">outside the system</span></td>
+          <td>Customer contacts Q&amp;M by phone, email, or in person to cancel their enrollment.</td>
+          <td>—</td>
+          <td>A cancellation request known to staff</td>
+          <td>None yet — this is the one process in the system with no digital front door. A WhatsApp cancellation command is a natural next step, not built today.</td>
+        </tr>
+        <tr>
+          <td class="step-name staff">2 · Staff opens the Admin Portal<span class="step-ref">authentication</span></td>
+          <td>Staff logs into the password-protected accountant portal.</td>
+          <td>Admin credentials</td>
+          <td>Authenticated session</td>
+          <td>The same shared portal used for every accounts task — no separate cancellation-specific tool to learn.</td>
+        </tr>
+        <tr>
+          <td class="step-name staff">3 · Staff submits the request<span class="step-ref">enrollment + reason</span></td>
+          <td>Staff enters which enrollment is cancelling and why.</td>
+          <td>Enrollment ID, reason</td>
+          <td>A cancellation request sent to the backend</td>
+          <td>One submission triggers everything below it — no separate spreadsheet update, no separate email to accounts to remember.</td>
+        </tr>
+        <tr>
+          <td class="step-name decision">4 · Already-cancelled check<span class="step-ref">safeguard</span></td>
+          <td>System refuses to process the same cancellation twice.</td>
+          <td>Enrollment's current status</td>
+          <td>Pass, or an immediate error</td>
+          <td>A safeguard a manual paper or spreadsheet process could easily miss under volume — prevents a duplicate credit note or a confused record.</td>
+        </tr>
+        <tr>
+          <td class="step-name backend">5 · Credit note created, enrollment cancelled<span class="step-ref">immediate</span></td>
+          <td>How much the customer has actually paid is tallied, a credit note number is issued, the enrollment is marked cancelled, and the seat is released — all the moment staff submits the request.</td>
+          <td>Enrollment record, confirmed payments on file</td>
+          <td>A credit note record; a cancelled enrollment; a freed seat</td>
+          <td>The seat is available to the next customer instantly, and the amount owed back is calculated automatically from the real payment history — no manual reconciliation.</td>
+        </tr>
+        <tr>
+          <td class="step-name backend">6 · Accounts team notified<span class="step-ref">internal email</span></td>
+          <td>An internal email alerts accounts that a credit note is waiting for review.</td>
+          <td>Credit note details</td>
+          <td>Internal notification email</td>
+          <td>Nothing waits unseen in an inbox or a to-do list — the request is visible the moment it exists.</td>
+        </tr>
+        <tr>
+          <td class="step-name staff">7 · Staff approves the credit note<span class="step-ref">review</span></td>
+          <td>A staff member reviews and approves the request in the same portal.</td>
+          <td>Credit note ID</td>
+          <td>Approval action</td>
+          <td>The one genuine judgement call in this process — deliberately left to a person, not automated away.</td>
+        </tr>
+        <tr>
+          <td class="step-name db">8 · Credit note finalized<span class="step-ref">audit record</span></td>
+          <td>System marks the credit note approved and records exactly when.</td>
+          <td>Approval action</td>
+          <td>Approved credit note record with a timestamp</td>
+          <td>A permanent, timestamped audit record of who approved what and when, created automatically.</td>
+        </tr>
+        <tr>
+          <td class="step-name backend">9 · Credit note PDF generated<span class="step-ref">document</span></td>
+          <td>A formal credit note document is produced automatically, with the amount and reason.</td>
+          <td>Credit note + enrollment details</td>
+          <td>Credit note PDF</td>
+          <td>A properly formatted, correct document in seconds — no manual drafting.</td>
+        </tr>
+        <tr>
+          <td class="step-name backend">10 · Customer is emailed<span class="step-ref">first contact</span></td>
+          <td>The customer receives their credit note by email — the first and only time this process contacts them.</td>
+          <td>Credit note PDF, customer email</td>
+          <td>Sent email</td>
+          <td class="automation">Instant delivery the moment it's approved, with no separate step for staff to remember.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="eyebrow" style="margin-top:44px;">For engineers — implementation trace</p>
+  <h2 style="margin-top:0;">Same journey, at file-and-function level</h2>
+  <p class="dek">Exact code references for anyone implementing or auditing this process.</p>
+
+  <h2><span class="step-scope">Stage 1 — Request (staff-initiated, immediate effect)</span>app/admin.py → services/payments.py: request_credit_note()</h2>
+  <div class="steps">
+    <div class="step">
+      <span class="step-num staff">01</span>
+      <div><p class="step-title">Admin Portal authentication <span class="tag staff">staff</span></p>
+      <p class="step-text"><code>app/admin.py</code> — <code>HTTPBasic</code>, hardcoded <code>ADMIN_USER</code>/<code>ADMIN_PASS</code> checked via <code>secrets.compare_digest()</code>. Explicitly marked in the code as POC-grade — override via env vars for a real deployment.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-num staff">02</span>
+      <div><p class="step-title">POST /admin/credit-notes/request <span class="tag staff">staff</span></p>
+      <p class="step-text">Params <code>enrollment_id: int, reason: str = "Cancellation"</code> → <code>payment_service.request_credit_note(enrollment_id, reason)</code>.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-num decision">03</span>
+      <div><p class="step-title">Guard: already cancelled? <span class="tag decision">decision</span></p>
+      <p class="step-text"><code>services/payments.py</code> — <code>repo.get_enrollment(enrollment_id)</code>; returns <code>{"ok": False}</code> if not found or if <code>enrollment["status"] == "cancelled"</code>. This is the <em>only</em> eligibility check — there is no "must be unpaid" or similar restriction.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-num db">04</span>
+      <div><p class="step-title">Create + cancel, synchronously <span class="tag db">database</span></p>
+      <p class="step-text"><code>repo.confirmed_payments_for_enrollment()</code> sums <code>detected_amount</code> for <code>verdict='confirmed'</code> rows → <code>total_paid</code>. <code>new_credit_note_no()</code> (utils.py, "CN" prefix, <code>credit_note_seq</code>) then <code>repo.create_credit_note(...)</code> INSERTs into <code>credit_notes</code> (status defaults <code>'requested'</code>), <code>repo.update_enrollment(status="cancelled")</code>, and <code>repo.adjust_schedule_seats(schedule_id, -1)</code> (clamped ≥0 via <code>GREATEST(seats_taken + delta, 0)</code>) — all three writes happen in this one call, before any approval.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-num backend">05</span>
+      <div><p class="step-title">send_email(settings.accounts_email, ...) <span class="tag backend">backend</span></p>
+      <p class="step-text">Internal notification only — <code>enrollment["email"]</code> (the customer) is never touched at this stage.</p></div>
+    </div>
+  </div>
+
+  <h2><span class="step-scope">Stage 2 — Approval (separate staff action, no status guard)</span>app/admin.py → services/payments.py: approve_credit_note()</h2>
+  <div class="steps">
+    <div class="step">
+      <span class="step-num staff">06</span>
+      <div><p class="step-title">POST /admin/credit-notes/{id}/approve <span class="tag staff">staff</span></p>
+      <p class="step-text">→ <code>payment_service.approve_credit_note(credit_note_id)</code>. An identical route also exists in <code>app/dbadmin.py</code> (database manager UI), calling the same function.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-num db">07</span>
+      <div><p class="step-title">repo.approve_credit_note(credit_note_id) <span class="tag db">database</span></p>
+      <p class="step-text"><code>UPDATE credit_notes SET status = 'approved', resolved_at = now() WHERE id = %s</code>. No check that the row is still <code>'requested'</code> — calling this twice is harmless but not prevented.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-num backend">08</span>
+      <div><p class="step-title">generate_credit_note_pdf(enrollment, cn) <span class="tag backend">backend</span></p>
+      <p class="step-text"><code>app/pdf.py</code> — writes <code>generated_dir/credit_note_{cn_no}.pdf</code> with "Credit Amount" (<code>cn.amount</code>, falling back to <code>enrollment.net_payable</code>) and "Reason".</p></div>
+    </div>
+    <div class="step">
+      <span class="step-num backend">09</span>
+      <div><p class="step-title">send_email(enrollment["email"], ..., attachments=[pdf_path]) <span class="tag backend">backend</span></p>
+      <p class="step-text">The customer's only notification in the entire flow — sent only here, only on approval.</p></div>
+    </div>
+  </div>
+
+  <div class="callout">
+    <strong>Known gap:</strong> <code>db/schema.sql</code>'s <code>credit_notes.status</code> CHECK
+    constraint allows <code>'requested' | 'approved' | 'rejected'</code>, but no
+    <code>reject_credit_note()</code> function exists in <code>repositories.py</code> or
+    <code>services/payments.py</code>, and no route in <code>admin.py</code> exposes one. A request that
+    shouldn't be honored currently has no built-in way to be declined — staff would have to handle that
+    outside the system.
+  </div>
+
+  <p class="footnote">Q&amp;M Dental Group — WhatsApp Enquiry &amp; Enrollment System · source: app/admin.py, app/services/payments.py, app/repositories.py, app/pdf.py, db/schema.sql</p>
+
+</div>
+</body>
+</html>

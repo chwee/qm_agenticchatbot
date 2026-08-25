@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WhatsApp Mock — Q&M Training (Agent View)</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #e5ddd5;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* ── Header ─────────────────────────────────────────────────────────── */
+    #header {
+      background: #075E54;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 16px;
+      flex-shrink: 0;
+    }
+    #header .avatar {
+      width: 40px; height: 40px;
+      border-radius: 50%;
+      background: #25D366;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px;
+    }
+    #header .info h2 { font-size: 16px; font-weight: 600; }
+    #header .info p  { font-size: 12px; opacity: .8; }
+    #header .badge {
+      margin-left: auto;
+      background: #128C7E;
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 11px;
+    }
+
+    /* ── Agent legend ─────────────────────────────────────────────────────
+       Shows, up front, the icon/colour every reply bubble below will be
+       tagged with — so "which agent answered" is readable at a glance
+       without hovering or reading the badge text on every single bubble. */
+    #legend {
+      background: #0b3d37;
+      padding: 8px 16px;
+      display: flex;
+      gap: 14px;
+      flex-wrap: wrap;
+      flex-shrink: 0;
+      align-items: center;
+    }
+    #legend .legend-title {
+      color: #9fe3d8;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: .6px;
+      margin-right: 2px;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 11px;
+      color: #eafff9;
+      background: rgba(255,255,255,.08);
+      border-left: 3px solid var(--c);
+      border-radius: 4px;
+      padding: 3px 8px 3px 6px;
+    }
+    .legend-item .ic { font-size: 13px; }
+
+    /* ── Sender settings panel ───────────────────────────────────────────── */
+    #settings {
+      background: #128C7E;
+      padding: 8px 16px;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+      flex-shrink: 0;
+    }
+    #settings label { color: #d0f0ea; font-size: 12px; white-space: nowrap; }
+    #settings input {
+      background: #075E54;
+      border: 1px solid #0a7a6e;
+      color: #fff;
+      border-radius: 4px;
+      padding: 4px 8px;
+      font-size: 13px;
+      width: 160px;
+    }
+    #settings input::placeholder { color: #88c9c1; }
+    #settings .hint {
+      margin-left: auto;
+      color: #9fe3d8;
+      font-size: 11px;
+    }
+
+    /* ── Chat area ───────────────────────────────────────────────────────── */
+    #chat {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .bubble-row {
+      display: flex;
+      flex-direction: column;
+    }
+    .bubble-row.sent     { align-items: flex-end; }
+    .bubble-row.received { align-items: flex-start; }
+
+    /* Agent badge — sits above a received bubble, coloured per agent */
+    .agent-badge {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--c);
+      margin: 0 0 3px 4px;
+    }
+    .agent-badge .ic {
+      font-size: 13px;
+      width: 20px; height: 20px;
+      border-radius: 50%;
+      background: var(--c);
+      display: flex; align-items: center; justify-content: center;
+      filter: none;
+    }
+    .agent-badge .ic-inner { font-size: 11px; }
+
+    .bubble {
+      max-width: 72%;
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 14px;
+      line-height: 1.5;
+      position: relative;
+      word-break: break-word;
+      white-space: pre-wrap;
+    }
+    .bubble-row.sent .bubble {
+      background: #DCF8C6;
+      border-top-right-radius: 2px;
+    }
+    .bubble-row.received .bubble {
+      background: #fff;
+      border-top-left-radius: 2px;
+      border-left: 4px solid var(--c, #ccc);
+    }
+    .bubble .meta {
+      font-size: 11px;
+      color: #999;
+      text-align: right;
+      margin-top: 4px;
+    }
+    .bubble.error { background: #fde8e8; color: #c0392b; border-left-color: #c0392b !important; }
+
+    /* Typing indicator */
+    .typing-dots span {
+      display: inline-block;
+      width: 6px; height: 6px;
+      background: #aaa;
+      border-radius: 50%;
+      margin: 0 2px;
+      animation: blink 1.2s infinite;
+    }
+    .typing-dots span:nth-child(2) { animation-delay: .2s; }
+    .typing-dots span:nth-child(3) { animation-delay: .4s; }
+    @keyframes blink {
+      0%, 80%, 100% { opacity: .2; transform: scale(.8); }
+      40%           { opacity: 1;  transform: scale(1); }
+    }
+
+    /* ── Image preview bar (shown when 1+ images are attached) ──────────── */
+    #preview-bar {
+      background: #e8f5e9;
+      padding: 6px 12px;
+      display: none;
+      align-items: center;
+      gap: 10px;
+      flex-shrink: 0;
+      border-top: 1px solid #c8e6c9;
+    }
+    #preview-thumbs {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      flex-shrink: 0;
+    }
+    .preview-item {
+      position: relative;
+      width: 48px; height: 48px;
+      flex-shrink: 0;
+    }
+    .preview-item img {
+      width: 48px; height: 48px;
+      object-fit: cover;
+      border-radius: 6px;
+      border: 1px solid #a5d6a7;
+      cursor: pointer;
+    }
+    .preview-item .rm-btn {
+      position: absolute;
+      top: -6px; right: -6px;
+      width: 18px; height: 18px;
+      border-radius: 50%;
+      background: #c62828;
+      color: #fff;
+      border: none;
+      cursor: pointer;
+      font-size: 11px;
+      line-height: 1;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 1px 3px rgba(0,0,0,.3);
+    }
+    .preview-item .rm-btn:hover { background: #e53935; }
+    #preview-bar .preview-info {
+      flex: 1;
+      overflow: hidden;
+    }
+    #preview-bar .preview-label {
+      font-size: 10px;
+      color: #388E3C;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+    }
+    #preview-bar .preview-name {
+      font-size: 12px;
+      color: #1b5e20;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    #clear-img-btn {
+      width: 26px; height: 26px;
+      border-radius: 50%;
+      background: #c62828;
+      color: #fff;
+      border: none;
+      cursor: pointer;
+      font-size: 14px;
+      line-height: 1;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    #clear-img-btn:hover { background: #e53935; }
+
+    /* ── Input bar ───────────────────────────────────────────────────────── */
+    #input-bar {
+      background: #f0f0f0;
+      padding: 8px 12px;
+      display: flex;
+      gap: 8px;
+      align-items: flex-end;
+      flex-shrink: 0;
+      border-top: 1px solid #ddd;
+    }
+    #attach-btn {
+      width: 38px; height: 38px;
+      border-radius: 50%;
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+      transition: background .15s;
+    }
+    #attach-btn:hover { background: #ddd; }
+    #attach-btn svg   { fill: #666; }
+    #msg-input {
+      flex: 1;
+      border: none;
+      border-radius: 20px;
+      padding: 10px 16px;
+      font-size: 15px;
+      outline: none;
+      resize: none;
+      font-family: inherit;
+      max-height: 120px;
+      overflow-y: auto;
+      line-height: 1.4;
+    }
+    #send-btn {
+      width: 44px; height: 44px;
+      border-radius: 50%;
+      background: #075E54;
+      border: none;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+      transition: background .2s;
+    }
+    #send-btn:hover   { background: #128C7E; }
+    #send-btn:active  { background: #054d45; }
+    #send-btn svg { fill: #fff; }
+    #send-btn:disabled { background: #aaa; cursor: not-allowed; }
+
+    /* ── Image thumbnail inside chat bubble ──────────────────────────────── */
+    .bubble-img {
+      max-width: 220px;
+      max-height: 160px;
+      width: 100%;
+      object-fit: cover;
+      border-radius: 6px;
+      display: block;
+      margin-bottom: 4px;
+      cursor: pointer;
+    }
+
+    /* ── Quick free-text prompts ─────────────────────────────────────────── */
+    #chips {
+      background: #f0f0f0;
+      padding: 6px 12px;
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      flex-shrink: 0;
+      border-top: 1px solid #e0e0e0;
+    }
+    .chip {
+      background: #fff;
+      border: 1px solid #c8e6c9;
+      color: #075E54;
+      border-radius: 14px;
+      padding: 3px 10px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: background .15s;
+    }
+    .chip:hover { background: #e8f5e9; }
+
+    /* ── Scrollbar ───────────────────────────────────────────────────────── */
+    #chat::-webkit-scrollbar { width: 5px; }
+    #chat::-webkit-scrollbar-thumb { background: #bbb; border-radius: 4px; }
+  </style>
+</head>
+<body>
+
+<!-- Header -->
+<div id="header">
+  <div class="avatar">💬</div>
+  <div class="info">
+    <h2>Q&amp;M Dental Training</h2>
+    <p id="header-sub">+65 6550 1754 — Agent View</p>
+  </div>
+  <div class="badge">MOCK · AGENT VIEW</div>
+</div>
+
+<!-- Agent legend -->
+<div id="legend">
+  <span class="legend-title">Replies tagged by</span>
+  <span class="legend-item" style="--c:#5c6bc0"><span class="ic">🧭</span> Router</span>
+  <span class="legend-item" style="--c:#00897b"><span class="ic">📚</span> Module A · Enquiry</span>
+  <span class="legend-item" style="--c:#7b1fa2"><span class="ic">📝</span> Module B · Enrolment</span>
+  <span class="legend-item" style="--c:#e65100"><span class="ic">💳</span> Module C · Payment</span>
+  <span class="legend-item" style="--c:#546e7a"><span class="ic">🪪</span> Registration</span>
+</div>
+
+<!-- Sender settings -->
+<div id="settings">
+  <label>Account type
+    <select id="acct-type" onchange="updateJidPreview()" style="background:#075E54;color:#fff;border:1px solid #0a7a6e;border-radius:4px;padding:4px 8px;font-size:13px;">
+      <option value="cus">@c.us (legacy — phone = JID)</option>
+      <option value="lid">@lid (linked identity)</option>
+    </select>
+  </label>
+  <label>Phone <span style="opacity:.7;font-size:11px;">(digits, no +)</span>
+    <input id="sender-phone" type="text" value="6591234567" placeholder="6591234567" oninput="updateJidPreview()" />
+  </label>
+  <label id="lid-label" style="display:none;">LID
+    <input id="sender-lid" type="text" placeholder="153811586920512" oninput="updateJidPreview()" />
+  </label>
+  <label>Name
+    <input id="sender-name" type="text" value="Test User" placeholder="Test User" />
+  </label>
+  <span class="hint" id="jid-preview">chat_id: 6591234567@c.us</span>
+</div>
+
+<!-- Quick free-text prompts (Requirement 7 — no command syntax any more;
+     these are just example messages that reliably hit each agent, not
+     commands the backend parses specially). -->
+<div id="chips">
+  <span class="chip" onclick="setMsg('What courses do you offer?')" title="Routes to Module A">📚 courses</span>
+  <span class="chip" onclick="setMsg('What is the fee for course 1?')" title="Routes to Module A">📚 fees</span>
+  <span class="chip" onclick="setMsg('I want to enrol in a course')" title="Routes to Module B">📝 enrol</span>
+  <span class="chip" onclick="setMsg('What am I enrolled in?')" title="Routes to Module B">📝 my status</span>
+  <span class="chip" onclick="setMsg('Can you resend my invoice?')" title="Routes to Module B">📝 invoice</span>
+  <span class="chip" onclick="setMsg('How do I pay for my course?')" title="Routes to Module C">💳 how to pay</span>
+  <span class="chip" onclick="payChip()" title="Attach a screenshot — Module C, deterministic money path">💳 📷 pay</span>
+  <span class="chip" onclick="setMsg('remind me nearer the date')" title="Routes to Module A">📚 remind me</span>
+  <span class="chip" onclick="setMsg('status')" title="Often ambiguous — may show the Router’s disambiguation menu">🧭 status</span>
+</div>
+
+<!-- Chat -->
+<div id="chat"></div>
+
+<!-- Hidden file input — multiple: pick several screenshots (e.g. SkillsFuture
+     claim + PayNow) in one go; they're still sent as separate messages,
+     one image each, matching how WhatsApp actually delivers media. -->
+<input type="file" id="img-input" accept="image/*" multiple style="display:none" onchange="handleImageSelect()" />
+
+<!-- Image preview bar (visible only when 1+ images are attached) -->
+<div id="preview-bar">
+  <div id="preview-thumbs"></div>
+  <div class="preview-info">
+    <div class="preview-label" id="preview-label">screenshot attached</div>
+    <div class="preview-name">Sent as separate messages, one per image, same caption</div>
+  </div>
+  <button id="clear-img-btn" onclick="clearAttachment()" title="Remove all">✕</button>
+</div>
+
+<!-- Input -->
+<div id="input-bar">
+  <button id="attach-btn" onclick="document.getElementById('img-input').click()" title="Attach payment screenshot(s)">
+    <svg width="22" height="22" viewBox="0 0 24 24">
+      <path d="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5a2.5 2.5 0 0 1 5 0v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6H10v9.5a2.5 2.5 0 0 0 5 0V5c0-2.21-1.79-4-4-4S7 2.79 7 5v12.5c0 3.04 2.46 5.5 5.5 5.5s5.5-2.46 5.5-5.5V6h-1.5z"/>
+    </svg>
+  </button>
+  <textarea id="msg-input" rows="1" placeholder="Type a message…"></textarea>
+  <button id="send-btn" onclick="sendMessage()" title="Send">
+    <svg width="20" height="20" viewBox="0 0 24 24">
+      <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+    </svg>
+  </button>
+</div>
+
+<script>
+  const ENDPOINT = 'http://localhost:8000/webhook/whatsapp/sync';
+
+  const chat     = document.getElementById('chat');
+  const input    = document.getElementById('msg-input');
+  const sendBtn  = document.getElementById('send-btn');
+
+  /* ── Agent metadata for the badge shown above each received bubble ─────
+     Keyed primarily by the backend's `module` field (A/B/C/ROUTER); a
+     registration-gate reply also reports module="B" but agent="Registration"
+     (it's the Orchestrator's own deterministic prompt, not the Module B
+     agent itself), so that combination is special-cased to its own badge. */
+  const AGENT_META = {
+    ROUTER: { icon: '🧭', label: 'Router',               color: '#5c6bc0' },
+    A:      { icon: '📚', label: 'Module A · Enquiry',    color: '#00897b' },
+    B:      { icon: '📝', label: 'Module B · Enrolment',  color: '#7b1fa2' },
+    C:      { icon: '💳', label: 'Module C · Payment',    color: '#e65100' },
+  };
+  const REGISTRATION_META = { icon: '🪪', label: 'Registration', color: '#546e7a' };
+
+  function agentMeta(module, agent) {
+    if (agent === 'Registration') return REGISTRATION_META;
+    return AGENT_META[module] || null;
+  }
+
+  /* ── Attached images state (0..N) ─────────────────────────────────────
+     Multiple screenshots can be picked in one file dialog (e.g. a
+     SkillsFuture claim + a PayNow transfer for the same invoice), but
+     WhatsApp itself only ever delivers ONE image per message — so these are
+     queued here and sent as a sequence of separate messages, never batched
+     into a single payload. */
+  let attachedImages = []; // [{ data: base64string, mimetype, src: dataURL, name }, ...]
+
+  function handleImageSelect() {
+    const files = Array.from(document.getElementById('img-input').files || []);
+    if (!files.length) return;
+    let remaining = files.length;
+    files.forEach(file => {
+      const reader = new FileReader();
+      reader.onload = e => {
+        const src = e.target.result;               // full data URL
+        const [header, b64] = src.split(',');
+        const mimetype = (header.match(/:(.*?);/) || [])[1] || 'image/jpeg';
+        attachedImages.push({ data: b64, mimetype, src, name: file.name });
+        if (--remaining === 0) renderPreviewBar();
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function renderPreviewBar() {
+    const bar = document.getElementById('preview-bar');
+    if (!attachedImages.length) { bar.style.display = 'none'; return; }
+    bar.style.display = 'flex';
+    document.getElementById('preview-thumbs').innerHTML = attachedImages.map((img, i) => `
+      <div class="preview-item">
+        <img src="${img.src}" alt="preview" onclick="viewFullImage(${i})" title="${escapeHtml(img.name)} — click to enlarge" />
+        <button class="rm-btn" onclick="removeAttachment(${i})" title="Remove">✕</button>
+      </div>`).join('');
+    const n = attachedImages.length;
+    document.getElementById('preview-label').textContent =
+      `${n} screenshot${n > 1 ? 's' : ''} attached`;
+  }
+
+  function removeAttachment(i) {
+    attachedImages.splice(i, 1);
+    document.getElementById('img-input').value = '';
+    renderPreviewBar();
+  }
+
+  function clearAttachment() {
+    attachedImages = [];
+    document.getElementById('img-input').value = '';
+    renderPreviewBar();
+  }
+
+  function viewFullImage(i) {
+    const img = attachedImages[i];
+    if (!img) return;
+    const w = window.open();
+    w.document.write(`<img src="${img.src}" style="max-width:100%;"/>`);
+  }
+
+  /* ── 📷 pay chip: pre-fill caption and open image picker ────────────── */
+  function payChip() {
+    setMsg('Here is my payment screenshot');
+    document.getElementById('img-input').click();
+  }
+
+  /* ── Account-type toggle ─────────────────────────────────────────────── */
+  function updateJidPreview() {
+    const type  = document.getElementById('acct-type').value;
+    const phone = document.getElementById('sender-phone').value.trim();
+    const lid   = document.getElementById('sender-lid').value.trim();
+    const lidLabel = document.getElementById('lid-label');
+    const preview  = document.getElementById('jid-preview');
+
+    if (type === 'lid') {
+      lidLabel.style.display = '';
+      const chatId = lid ? `${lid}@lid` : '…@lid';
+      preview.textContent = `chat_id: ${chatId}  phone: ${phone || 'null (unresolved)'}`;
+    } else {
+      lidLabel.style.display = 'none';
+      preview.textContent = `chat_id: ${phone || '…'}@c.us`;
+    }
+  }
+
+  /* ── Build sender object matching the actual gateway payload ─────────── */
+  function buildSender() {
+    const type  = document.getElementById('acct-type').value;
+    const phone = document.getElementById('sender-phone').value.trim();
+    const lid   = document.getElementById('sender-lid').value.trim();
+    const name  = document.getElementById('sender-name').value.trim() || 'Test User';
+
+    if (type === 'lid') {
+      return {
+        chat_id: lid ? `${lid}@lid` : `${phone}@lid`,
+        phone:   phone || null,   // null = LID unresolved (backend will ask user to register)
+        name,
+      };
+    }
+    // @c.us: phone IS the JID — mirrors what the WhatsApp gateway sends
+    return {
+      chat_id: `${phone}@c.us`,
+      phone,
+      name,
+    };
+  }
+
+  /* ── Auto-resize textarea ────────────────────────────────────────────── */
+  input.addEventListener('input', () => {
+    input.style.height = 'auto';
+    input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+  });
+
+  /* ── Enter = send, Shift+Enter = new line ────────────────────────────── */
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  });
+
+  /* ── Quick-chip helper ───────────────────────────────────────────────── */
+  function setMsg(text) {
+    input.value = text;
+    input.style.height = 'auto';
+    input.focus();
+  }
+
+  /* ── Timestamp ───────────────────────────────────────────────────────── */
+  function now() {
+    return new Date().toLocaleTimeString('en-SG', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  /* ── Append a bubble. For a received message, `module`/`agent` (from the
+     backend's /webhook/whatsapp/sync response) render an agent badge above
+     the bubble and colour its left border to match — this is the whole
+     point of this mock over the plain one. */
+  function addBubble(text, side, extraClass = '', imgSrc = '', module = '', agent = '') {
+    const row = document.createElement('div');
+    row.className = `bubble-row ${side}`;
+
+    if (side === 'received') {
+      const meta = agentMeta(module, agent);
+      if (meta) {
+        row.style.setProperty('--c', meta.color);
+        const badge = document.createElement('div');
+        badge.className = 'agent-badge';
+        badge.innerHTML = `<span class="ic"><span class="ic-inner">${meta.icon}</span></span>${escapeHtml(meta.label)}`;
+        row.appendChild(badge);
+      }
+    }
+
+    const bub = document.createElement('div');
+    bub.className = `bubble${extraClass ? ' ' + extraClass : ''}`;
+
+    let inner = '';
+    if (imgSrc) {
+      inner += `<img class="bubble-img" src="${imgSrc}" alt="PayNow screenshot"
+                  onclick="window.open().document.write('<img src=\\'${imgSrc}\\' style=\\'max-width:100%\\'/>');"/>`;
+    }
+    inner += escapeHtml(text).replace(/\*(.*?)\*/g, '<strong>$1</strong>');
+    inner += `<div class="meta">${now()}${imgSrc ? ' 📷' : ''}</div>`;
+    bub.innerHTML = inner;
+
+    row.appendChild(bub);
+    chat.appendChild(row);
+    chat.scrollTop = chat.scrollHeight;
+    return bub;
+  }
+
+  /* ── Typing indicator ────────────────────────────────────────────────── */
+  function showTyping() {
+    const row = document.createElement('div');
+    row.className = 'bubble-row received';
+    row.id = 'typing-row';
+    row.innerHTML = `
+      <div class="bubble">
+        <div class="typing-dots">
+          <span></span><span></span><span></span>
+        </div>
+      </div>`;
+    chat.appendChild(row);
+    chat.scrollTop = chat.scrollHeight;
+  }
+
+  function hideTyping() {
+    const row = document.getElementById('typing-row');
+    if (row) row.remove();
+  }
+
+  /* ── Escape HTML ─────────────────────────────────────────────────────── */
+  function escapeHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  /* ── Send one message (optionally with one image) and render the reply ─
+     Reads `module`/`agent` off the JSON response (added specifically for
+     this mock — see backend/app/main.py: whatsapp_webhook_sync()) and
+     passes them through to addBubble() for the agent badge. */
+  async function sendOne(body, img) {
+    addBubble(body, 'sent', '', img ? img.src : '');
+
+    const payload = {
+      from:    buildSender(),
+      message: { body },
+    };
+    if (img) {
+      payload.media = { data: img.data, mimetype: img.mimetype };
+    }
+
+    showTyping();
+    try {
+      const res = await fetch(ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      hideTyping();
+
+      const text = await res.text();
+      let reply, module = '', agent = '';
+      try {
+        const json = JSON.parse(text);
+        reply  = json.reply ?? json.message ?? JSON.stringify(json, null, 2);
+        module = json.module || '';
+        agent  = json.agent || '';
+      } catch {
+        reply = text;
+      }
+
+      if (!res.ok) {
+        addBubble(`[HTTP ${res.status}] ${reply || res.statusText}`, 'received', 'error');
+      } else {
+        addBubble(reply || '(empty response)', 'received', '', '', module, agent);
+      }
+    } catch (err) {
+      hideTyping();
+      addBubble(
+        `Connection error — is the backend running?\n\nEndpoint: ${ENDPOINT}\n\nDetail: ${err.message}`,
+        'received',
+        'error'
+      );
+    }
+  }
+
+  /* ── Main send ───────────────────────────────────────────────────────────
+     0 images  → one text-only message (unchanged behaviour).
+     1+ images → the SAME caption is sent once per image, as separate
+     messages in sequence — mirrors how WhatsApp actually delivers media
+     (one image per message) rather than bundling them into one payload, so
+     e.g. a SkillsFuture claim screenshot + a PayNow screenshot for the same
+     invoice can be picked together but still arrive — and get verified — one
+     at a time, exactly like a real conversation. */
+  async function sendMessage() {
+    const body = input.value.trim();
+    if (!body && !attachedImages.length) return;  // need text or image(s)
+
+    const images = attachedImages.slice(); // snapshot before clearing
+    input.value = '';
+    input.style.height = 'auto';
+    clearAttachment();
+
+    sendBtn.disabled = true;
+    try {
+      if (!images.length) {
+        await sendOne(body, null);
+      } else {
+        for (const img of images) {
+          await sendOne(body, img);
+        }
+      }
+    } finally {
+      sendBtn.disabled = false;
+      input.focus();
+    }
+  }
+
+  /* ── Welcome message ─────────────────────────────────────────────────── */
+  window.addEventListener('DOMContentLoaded', () => {
+    updateJidPreview();
+    addBubble(
+      'Welcome to the Q&M WhatsApp mock — Agent View.\n\nEach reply below is tagged with the agent that actually composed it (see the legend bar above): the Router, Module A (enquiry), Module B (enrolment), Module C (payment), or the Registration gate.\n\nType a message or pick a quick prompt above, then press Send or Enter.\n\nEndpoint: ' + ENDPOINT,
+      'received'
+    );
+    input.focus();
+  });
+</script>
+</body>
+</html>

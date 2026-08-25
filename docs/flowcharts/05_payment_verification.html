@@ -1,0 +1,630 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Flow — Payment Verification (Module C — Agent C)</title>
+<style>
+  :root {
+    --paper: #F5F2EA;
+    --card: #FFFFFF;
+    --card-alt: #FBF9F3;
+    --ink: #1E2430;
+    --ink-dim: #5B6270;
+    --line: #DED7C4;
+    --line-strong: #C9C0A8;
+
+    --gateway: #1F7A5C;   --gateway-bg: rgba(31,122,92,0.09);
+    --backend: #35478C;   --backend-bg: rgba(53,71,140,0.08);
+    --db: #7C4A9E;        --db-bg: rgba(124,74,158,0.08);
+    --ext: #8A6A2F;       --ext-bg: rgba(150,121,74,0.10);
+    --decision: #A3432E;  --decision-bg: rgba(163,67,46,0.08);
+
+    --font-display: -apple-system, BlinkMacSystemFont, "Segoe UI Semibold", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    --font-mono: ui-monospace, "Cascadia Code", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #12151B; --card: #181C24; --card-alt: #1E2330;
+      --ink: #E9E6DC; --ink-dim: #9CA0AC;
+      --line: #2B303C; --line-strong: #3A4050;
+      --gateway: #46CB9B; --gateway-bg: rgba(70,203,155,0.10);
+      --backend: #93A2F2; --backend-bg: rgba(147,162,242,0.10);
+      --db: #D19DF0; --db-bg: rgba(209,157,240,0.10);
+      --ext: #E4C27E; --ext-bg: rgba(228,194,126,0.10);
+      --decision: #E28870; --decision-bg: rgba(226,136,112,0.10);
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--font-body); -webkit-font-smoothing: antialiased; }
+  .page { max-width: 980px; margin: 0 auto; padding: 48px 24px 90px; }
+
+  .eyebrow { font-family: var(--font-mono); font-size: .72rem; letter-spacing: .16em; text-transform: uppercase; color: var(--backend); margin: 0 0 10px; }
+  h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(1.5rem, 1.1rem + 1.6vw, 2.05rem); letter-spacing: -0.01em; line-height: 1.15; text-wrap: balance; margin: 0 0 14px; }
+  .dek { font-size: .98rem; line-height: 1.6; color: var(--ink-dim); max-width: 68ch; margin: 0 0 22px; }
+  .dek code, p code, li code, td code { font-family: var(--font-mono); font-size: .87em; color: var(--ink); background: var(--card-alt); border: 1px solid var(--line); border-radius: 3px; padding: 1px 5px; }
+
+  .sample-box { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 30px; }
+  .sample {
+    font-family: var(--font-mono); font-size: .8rem; padding: 8px 12px;
+    border: 1px solid var(--line); border-radius: 5px; background: var(--card-alt); color: var(--ink-dim);
+  }
+  .sample b { color: var(--ink); font-weight: 600; }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 10px 20px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 6px; background: var(--card-alt); margin-bottom: 34px; }
+  .legend-item { display: flex; align-items: center; gap: 8px; font-family: var(--font-mono); font-size: .74rem; color: var(--ink-dim); }
+  .swatch { width: 10px; height: 10px; border-radius: 2px; flex: none; }
+  .swatch.diamond { border-radius: 0; transform: rotate(45deg); }
+
+  .diagram-frame {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--card);
+    padding: 18px;
+    margin-bottom: 12px;
+    overflow-x: auto;
+  }
+  .diagram-frame svg { display: block; margin: 0 auto; width: 100%; max-width: 660px; height: auto; }
+  figure.diagram-frame { margin: 0 0 12px; }
+  figcaption {
+    font-size: .84rem; line-height: 1.55; color: var(--ink-dim);
+    max-width: 66ch; margin: 0 0 28px;
+  }
+
+  .callout {
+    margin: 0 0 34px; padding: 16px 18px; border: 1px solid var(--line-strong); border-radius: 6px;
+    background: var(--card-alt); font-size: .88rem; line-height: 1.6; color: var(--ink-dim);
+  }
+  .callout strong { color: var(--ink); }
+  .callout h3 { margin: 0 0 8px; font-family: var(--font-display); font-size: .98rem; color: var(--ink); }
+
+  .agent-profile {
+    display: flex; align-items: center; gap: 16px;
+    padding: 16px 18px; border: 1px solid var(--line); border-radius: 8px;
+    background: var(--ext-bg); margin: 4px 0 28px;
+  }
+  .agent-avatar {
+    width: 46px; height: 46px; border-radius: 10px; flex: none;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--ext); color: var(--card);
+    font-family: var(--font-display); font-weight: 700; font-size: 1.15rem;
+  }
+  .agent-role { font-weight: 700; font-size: .96rem; margin: 0 0 3px; }
+  .agent-sub { font-size: .83rem; color: var(--ink-dim); margin: 0; line-height: 1.5; }
+  .agent-sub code { font-family: var(--font-mono); font-size: .82em; }
+
+  .table-wrap {
+    overflow-x: auto; margin: 0 0 16px;
+    border: 1px solid var(--line); border-radius: 8px;
+  }
+  .process-table { border-collapse: collapse; width: 100%; min-width: 1000px; font-size: .83rem; }
+  .process-table th, .process-table td { padding: 12px 14px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); }
+  .process-table thead th {
+    font-family: var(--font-mono); font-size: .66rem; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--ink-dim); background: var(--card-alt); border-bottom: 1px solid var(--line-strong); white-space: nowrap;
+  }
+  .process-table tbody tr:last-child td { border-bottom: none; }
+  .process-table td { color: var(--ink-dim); line-height: 1.55; }
+  .process-table td.step-name { font-weight: 600; color: var(--ink); border-left: 3px solid var(--line-strong); }
+  .process-table td.step-name .step-ref { display: block; font-family: var(--font-mono); font-weight: 400; font-size: .68rem; color: var(--ink-dim); margin-top: 2px; }
+  .process-table td.step-name.gateway { border-left-color: var(--gateway); }
+  .process-table td.step-name.backend { border-left-color: var(--backend); }
+  .process-table td.step-name.db { border-left-color: var(--db); }
+  .process-table td.step-name.ext { border-left-color: var(--ext); }
+  .process-table td.step-name.decision { border-left-color: var(--decision); }
+  .process-table td.automation { color: var(--ink); }
+
+  h2 { font-family: var(--font-display); font-size: 1.2rem; font-weight: 700; margin: 44px 0 6px; }
+  h2 .step-scope { font-family: var(--font-mono); font-size: .7rem; color: var(--ink-dim); font-weight: 400; text-transform: uppercase; letter-spacing: .08em; display: block; margin-bottom: 6px; }
+
+  .steps { display: flex; flex-direction: column; gap: 0; border-top: 1px solid var(--line); margin-top: 18px; }
+  .step { display: grid; grid-template-columns: 34px 1fr; column-gap: 14px; padding: 14px 0; border-bottom: 1px dashed var(--line); }
+  .step-num { font-family: var(--font-mono); font-size: .74rem; padding-top: 3px; }
+  .step-num.gateway { color: var(--gateway); }
+  .step-num.backend { color: var(--backend); }
+  .step-num.db { color: var(--db); }
+  .step-num.ext { color: var(--ext); }
+  .step-num.decision { color: var(--decision); }
+  .step-title { font-weight: 600; font-size: .94rem; margin: 0 0 4px; }
+  .step-title .tag {
+    font-family: var(--font-mono); font-size: .66rem; padding: 2px 7px; border-radius: 3px;
+    margin-left: 8px; vertical-align: 1px; text-transform: uppercase; letter-spacing: .04em;
+  }
+  .tag.gateway { color: var(--gateway); background: var(--gateway-bg); }
+  .tag.backend { color: var(--backend); background: var(--backend-bg); }
+  .tag.db { color: var(--db); background: var(--db-bg); }
+  .tag.ext { color: var(--ext); background: var(--ext-bg); }
+  .tag.decision { color: var(--decision); background: var(--decision-bg); }
+  .step-text { font-size: .87rem; line-height: 1.6; color: var(--ink-dim); margin: 0; max-width: 74ch; }
+
+  .footnote { margin-top: 22px; font-family: var(--font-mono); font-size: .72rem; color: var(--ink-dim); opacity: .8; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <p class="eyebrow">Instance 5 of N — per-feature execution trace</p>
+  <h1>Payment Verification</h1>
+  <p class="dek">
+    Picks up right where <a href="03_course_enrollment.html">Instance 03 — Course Enrollment</a> left
+    off: an invoice has already been generated and emailed, and a pending payment record is waiting.
+    Traces what happens when the customer submits proof of payment. This is the most
+    <strong>agentic</strong> instance in the series: a vision model actually looks at the screenshot and
+    extracts what it sees — but deliberately <strong>never decides the outcome itself</strong>. A separate,
+    fixed set of business rules checks the AI's reading against the real invoice balance before anything
+    is confirmed, receipted, or flagged. That boundary is the whole story of this diagram.
+  </p>
+
+  <div class="sample-box">
+    <span class="sample">Command + screenshot: <b>/pay INV-2026-0001</b> + PayNow screenshot</span>
+    <span class="sample">Caption only: <b>"pay for INV-2026-0861"</b> + screenshot</span>
+    <span class="sample">No image: <b>"how much do I still owe?"</b></span>
+  </div>
+
+  <div class="legend">
+    <div class="legend-item"><span class="swatch" style="background:var(--gateway)"></span>Gateway (whatsapp-server)</div>
+    <div class="legend-item"><span class="swatch" style="background:var(--backend)"></span>Backend / deterministic logic</div>
+    <div class="legend-item"><span class="swatch" style="background:var(--db)"></span>PostgreSQL read/write</div>
+    <div class="legend-item"><span class="swatch" style="background:var(--ext)"></span>OpenAI (vision or conversational)</div>
+    <div class="legend-item"><span class="swatch diamond" style="background:var(--decision)"></span>Decision / branch</div>
+  </div>
+
+  <figure class="diagram-frame">
+    <svg viewBox="0 0 920 1510" role="img" aria-label="Flowchart: a payment screenshot is resolved to an invoice, then a GPT-4o vision model extracts the amount, type and confidence from it, after which a separate deterministic rule set evaluates that extraction against the outstanding balance and routes to confirmed, mismatch, or unreadable — each with its own recorded outcome and reply — while a message with no screenshot instead goes through a five-step conversational agent loop: read the request, reason about intent, pick one of four read-only tools, run it against the live record, and compose a reply using only the tool's own figures.">
+      <defs>
+        <marker id="arrow5" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--ink-dim)"></path>
+        </marker>
+      </defs>
+
+      <!-- spine connectors -->
+      <g fill="none" stroke="var(--ink-dim)" stroke-width="1.75" marker-end="url(#arrow5)">
+        <line x1="450" y1="67"   x2="450" y2="106"></line>
+        <line x1="450" y1="162"  x2="450" y2="203"></line>
+        <line x1="450" y1="285"  x2="450" y2="311"></line>
+        <line x1="450" y1="367"  x2="450" y2="408"></line>
+        <line x1="560" y1="450"  x2="598" y2="450"></line>
+        <line x1="450" y1="490"  x2="450" y2="531"></line>
+        <line x1="450" y1="587"  x2="450" y2="641"></line>
+        <line x1="450" y1="697"  x2="450" y2="751"></line>
+        <line x1="450" y1="807"  x2="450" y2="861"></line>
+        <line x1="450" y1="917"  x2="450" y2="955"></line>
+        <line x1="450" y1="1041" x2="450" y2="1088"></line>
+        <line x1="560" y1="1130" x2="598" y2="1130"></line>
+        <line x1="450" y1="1170" x2="450" y2="1211"></line>
+        <line x1="450" y1="1267" x2="450" y2="1321"></line>
+        <line x1="450" y1="1377" x2="450" y2="1411"></line>
+      </g>
+      <line x1="340" y1="245" x2="150" y2="311" fill="none" stroke="var(--ink-dim)" stroke-width="1.75" marker-end="url(#arrow5)"></line>
+      <line x1="380" y1="807" x2="200" y2="861" fill="none" stroke="var(--ink-dim)" stroke-width="1.75" marker-end="url(#arrow5)"></line>
+      <line x1="520" y1="807" x2="700" y2="861" fill="none" stroke="var(--ink-dim)" stroke-width="1.75" marker-end="url(#arrow5)"></line>
+
+      <!-- elbow connectors converging on delivery -->
+      <g fill="none" stroke="var(--ink-dim)" stroke-width="1.6" marker-end="url(#arrow5)">
+        <path d="M40,890 L15,890 L15,1350 L300,1330"></path>
+        <path d="M20,740 L8,740 L8,1355 L300,1355"></path>
+        <path d="M860,450 L885,450 L885,1350 L600,1338"></path>
+        <path d="M860,890 L895,890 L895,1350 L600,1346"></path>
+        <path d="M860,1130 L905,1130 L905,1350 L600,1354"></path>
+      </g>
+
+      <!-- branch edge labels -->
+      <g font-size="11" fill="var(--ink-dim)" text-anchor="middle">
+        <text x="472" y="300">yes</text>
+        <text x="255" y="272">no</text>
+        <text x="472" y="505">yes</text>
+        <text x="583" y="435">no</text>
+        <text x="255" y="835">unreadable</text>
+        <text x="475" y="835">confirmed</text>
+        <text x="660" y="835">mismatch</text>
+        <text x="472" y="1190">yes</text>
+        <text x="583" y="1115">no</text>
+      </g>
+
+      <!-- N1 start pill -->
+      <rect x="300" y="13" width="300" height="54" rx="27" fill="var(--card)" stroke="var(--ink-dim)" stroke-width="1.5"></rect>
+      <text x="450" y="34" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">Customer submits payment proof</text>
+      <text x="450" y="50" text-anchor="middle" font-size="10" fill="var(--ink-dim)">/pay + screenshot, or plain text</text>
+
+      <!-- N2 gateway+orchestrator+router -->
+      <rect x="300" y="108" width="300" height="54" rx="8" fill="var(--card)" stroke="var(--gateway)" stroke-width="1.5"></rect>
+      <text x="450" y="130" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">Gateway → Orchestrator → Router</text>
+      <text x="450" y="146" text-anchor="middle" font-size="10" fill="var(--ink-dim)">same as Instance 01 — routed here</text>
+
+      <!-- D0 decision -->
+      <polygon points="450,205 560,245 450,285 340,245" fill="var(--card)" stroke="var(--decision)" stroke-width="1.5"></polygon>
+      <text x="450" y="240" text-anchor="middle" font-size="11" fill="var(--ink)">screenshot</text>
+      <text x="450" y="254" text-anchor="middle" font-size="11" fill="var(--ink)">attached?</text>
+
+      <!-- Conversational Agent C — expanded tool-use sequence (L1-L5) -->
+      <g fill="none" stroke="var(--ink-dim)" stroke-width="1.5" marker-end="url(#arrow5)">
+        <line x1="150" y1="367" x2="150" y2="411"></line>
+        <line x1="150" y1="467" x2="150" y2="511"></line>
+        <line x1="150" y1="567" x2="150" y2="611"></line>
+        <line x1="150" y1="667" x2="150" y2="711"></line>
+      </g>
+
+      <!-- L1 -->
+      <rect x="20" y="313" width="260" height="54" rx="8" fill="var(--card)" stroke="var(--ext)" stroke-width="1.5"></rect>
+      <text x="150" y="333" text-anchor="middle" font-size="12.5" font-weight="600" fill="var(--ink)">Agent C reads the request</text>
+      <text x="150" y="349" text-anchor="middle" font-size="9.5" fill="var(--ink-dim)">message + last 8 turns of history</text>
+
+      <!-- L2 -->
+      <rect x="20" y="413" width="260" height="54" rx="8" fill="var(--ext-bg)" stroke="var(--ext)" stroke-width="1.5"></rect>
+      <text x="150" y="433" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--ink)">Reasons about intent</text>
+      <text x="150" y="449" text-anchor="middle" font-size="9.5" fill="var(--ink-dim)">kickoff_agent() — GPT-4o-mini</text>
+
+      <!-- L3 -->
+      <rect x="20" y="513" width="260" height="54" rx="8" fill="var(--card)" stroke="var(--ext)" stroke-width="1.5"></rect>
+      <text x="150" y="533" text-anchor="middle" font-size="12.5" font-weight="600" fill="var(--ink)">Picks the matching tool</text>
+      <text x="150" y="549" text-anchor="middle" font-size="9.5" fill="var(--ink-dim)">Balance, Receipt, Invoice, or Status</text>
+
+      <!-- L4 -->
+      <rect x="20" y="613" width="260" height="54" rx="8" fill="var(--card)" stroke="var(--backend)" stroke-width="1.5"></rect>
+      <text x="150" y="633" text-anchor="middle" font-size="12.5" font-weight="600" fill="var(--ink)">Tool reads the real record</text>
+      <text x="150" y="649" text-anchor="middle" font-size="9.5" fill="var(--ink-dim)">same payments/enrollments tables</text>
+
+      <!-- L5 -->
+      <rect x="20" y="713" width="260" height="54" rx="8" fill="var(--card)" stroke="var(--ext)" stroke-width="1.5"></rect>
+      <text x="150" y="733" text-anchor="middle" font-size="12.5" font-weight="600" fill="var(--ink)">Composes the reply</text>
+      <text x="150" y="749" text-anchor="middle" font-size="9.5" fill="var(--ink-dim)">figures carried over — never guessed</text>
+
+      <!-- N3 resolve invoice -->
+      <rect x="300" y="313" width="300" height="54" rx="8" fill="var(--card)" stroke="var(--backend)" stroke-width="1.5"></rect>
+      <text x="450" y="335" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">Resolve the invoice number</text>
+      <text x="450" y="351" text-anchor="middle" font-size="10" fill="var(--ink-dim)">/pay arg, text regex, or latest outstanding</text>
+
+      <!-- D1 decision -->
+      <polygon points="450,410 560,450 450,490 340,450" fill="var(--card)" stroke="var(--decision)" stroke-width="1.5"></polygon>
+      <text x="450" y="445" text-anchor="middle" font-size="11" fill="var(--ink)">invoice valid</text>
+      <text x="450" y="459" text-anchor="middle" font-size="11" fill="var(--ink)">&amp; payable?</text>
+
+      <!-- N_err -->
+      <rect x="600" y="423" width="260" height="54" rx="8" fill="var(--card)" stroke="var(--backend)" stroke-width="1.5"></rect>
+      <text x="730" y="445" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">Reply: can't process</text>
+      <text x="730" y="461" text-anchor="middle" font-size="10" fill="var(--ink-dim)">not found, wrong account, or fully paid</text>
+
+      <!-- N4 compute remaining -->
+      <rect x="300" y="533" width="300" height="54" rx="8" fill="var(--card)" stroke="var(--backend)" stroke-width="1.5"></rect>
+      <text x="450" y="555" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">Compute remaining balance</text>
+      <text x="450" y="571" text-anchor="middle" font-size="10" fill="var(--ink-dim)">per type — SkillsFuture claim vs PayNow</text>
+
+      <!-- N5 vision (AI, prominent) -->
+      <rect x="300" y="643" width="300" height="54" rx="8" fill="var(--ext-bg)" stroke="var(--ext)" stroke-width="2"></rect>
+      <text x="450" y="665" text-anchor="middle" font-size="13" font-weight="700" fill="var(--ink)">Vision model reads the screenshot</text>
+      <text x="450" y="681" text-anchor="middle" font-size="10" fill="var(--ink-dim)">GPT-4o vision → type, amount, confidence</text>
+
+      <!-- N6 evaluate + record (deterministic, NOT AI) -->
+      <rect x="300" y="753" width="300" height="54" rx="8" fill="var(--card)" stroke="var(--backend)" stroke-width="1.5"></rect>
+      <text x="450" y="775" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">Evaluate &amp; record the attempt</text>
+      <text x="450" y="791" text-anchor="middle" font-size="10" fill="var(--ink-dim)">confirmed / mismatch / unreadable</text>
+
+      <!-- 3-way branch row -->
+      <rect x="40" y="863" width="260" height="54" rx="8" fill="var(--card)" stroke="var(--backend)" stroke-width="1.5"></rect>
+      <text x="170" y="885" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">Reply: please resend</text>
+      <text x="170" y="901" text-anchor="middle" font-size="10" fill="var(--ink-dim)">not a recognisable proof</text>
+
+      <rect x="320" y="863" width="260" height="54" rx="8" fill="var(--card)" stroke="var(--backend)" stroke-width="1.5"></rect>
+      <text x="450" y="885" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">Issue a receipt</text>
+      <text x="450" y="901" text-anchor="middle" font-size="10" fill="var(--ink-dim)">generate_receipt_pdf() → email</text>
+
+      <rect x="600" y="863" width="260" height="54" rx="8" fill="var(--card)" stroke="var(--backend)" stroke-width="1.5"></rect>
+      <text x="730" y="885" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">Flag for staff &amp; reply</text>
+      <text x="730" y="901" text-anchor="middle" font-size="10" fill="var(--ink-dim)">add_staff_task() + email STAFF_EMAIL</text>
+
+      <!-- DB cylinder -->
+      <rect x="350" y="957" width="200" height="50" fill="var(--card)"></rect>
+      <line x1="350" y1="957" x2="350" y2="1007" stroke="var(--db)" stroke-width="1.5"></line>
+      <line x1="550" y1="957" x2="550" y2="1007" stroke="var(--db)" stroke-width="1.5"></line>
+      <ellipse cx="450" cy="1007" rx="100" ry="13" fill="var(--card)" stroke="var(--db)" stroke-width="1.5"></ellipse>
+      <ellipse cx="450" cy="957" rx="100" ry="13" fill="var(--card)" stroke="var(--db)" stroke-width="1.5"></ellipse>
+      <text x="450" y="984" text-anchor="middle" font-size="12" font-weight="600" fill="var(--ink)">payments · enrollments</text>
+      <text x="450" y="998" text-anchor="middle" font-size="9.5" fill="var(--ink-dim)">receipt_no set · status updated</text>
+
+      <!-- D4 decision -->
+      <polygon points="450,1090 560,1130 450,1170 340,1130" fill="var(--card)" stroke="var(--decision)" stroke-width="1.5"></polygon>
+      <text x="450" y="1125" text-anchor="middle" font-size="11" fill="var(--ink)">all proofs</text>
+      <text x="450" y="1139" text-anchor="middle" font-size="11" fill="var(--ink)">sum to full fee?</text>
+
+      <!-- N8b partial -->
+      <rect x="600" y="1103" width="260" height="54" rx="8" fill="var(--card)" stroke="var(--backend)" stroke-width="1.5"></rect>
+      <text x="730" y="1125" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">Reply: partial payment</text>
+      <text x="730" y="1141" text-anchor="middle" font-size="10" fill="var(--ink-dim)">status stays awaiting_payment</text>
+
+      <!-- N8a complete -->
+      <rect x="300" y="1213" width="300" height="54" rx="8" fill="var(--card)" stroke="var(--backend)" stroke-width="1.5"></rect>
+      <text x="450" y="1235" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">Reply: payment complete!</text>
+      <text x="450" y="1251" text-anchor="middle" font-size="10" fill="var(--ink-dim)">status → receipt_issued</text>
+
+      <!-- N15 gateway delivery -->
+      <rect x="300" y="1323" width="300" height="54" rx="8" fill="var(--card)" stroke="var(--gateway)" stroke-width="1.5"></rect>
+      <text x="450" y="1345" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">Gateway delivery</text>
+      <text x="450" y="1361" text-anchor="middle" font-size="10" fill="var(--ink-dim)">send_whatsapp() → POST /send-reply</text>
+
+      <!-- N16 end pill -->
+      <rect x="300" y="1413" width="300" height="54" rx="27" fill="var(--card)" stroke="var(--ink-dim)" stroke-width="1.5"></rect>
+      <text x="450" y="1445" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">Customer sees the reply</text>
+    </svg>
+    <figcaption>
+      The one node with a heavier gold border is the only place actual AI judgement about the
+      <em>image</em> happens — everything directly below it (evaluate, record, confirm/flag/resend) is
+      fixed business logic applied <em>to</em> that AI output, never delegated back to it. On the left,
+      the no-image path shows the agent's own tool-use loop in full: it reads the request, reasons about
+      intent, picks exactly one of four tools, lets that tool query the real record, then writes the
+      reply — it never states a balance or invoice number without a tool call backing it. Six outcomes
+      converge on one delivery step: the agent's answer, a can't-process error, a resend request, a
+      staff-flagged mismatch, and a partial-payment notice — alongside the main "payment complete" path.
+    </figcaption>
+  </figure>
+
+  <div class="callout">
+    <h3>The boundary that makes this safe to automate</h3>
+    The vision model's only job is perception: read the screenshot, report what it sees, say how
+    confident it is. It never says "yes, accept this." Whether a screenshot actually counts as payment —
+    checked against the real outstanding balance, the tolerance for rounding, and a confidence
+    threshold — is decided entirely by ordinary code (<code>_evaluate_proof()</code>), the same function
+    every single time, with no model in that decision. If the AI is ever swapped for a different vision
+    model, this rule never has to change; if the business rule ever changes, no prompt has to change.
+  </div>
+
+  <p class="eyebrow">For stakeholders — process, data &amp; automation value</p>
+  <h2 style="margin-top:0;">What happens at each step, and what it replaces</h2>
+  <p class="dek">
+    A stakeholder view of the same journey — what happens, what it needs, what it produces, and what
+    running it automatically buys the business over a staff member manually eyeballing bank screenshots
+    against a spreadsheet of invoices.
+  </p>
+
+  <div class="agent-profile">
+    <div class="agent-avatar">C</div>
+    <div>
+      <p class="agent-role">Agent C — Payment Verification &amp; Accounts</p>
+      <p class="agent-sub">
+        Two distinct AI roles hide under one name. When a screenshot is attached, a
+        <code>GPT-4o vision</code> call reads it — always triggered directly by code, never by an agent's
+        own choice, so the money path never depends on conversational judgement. When there's no image,
+        a separate conversational agent (<code>"Q&amp;M Payment &amp; Accounts Agent"</code>) handles the
+        chat, but only by calling tools for real figures — it never states a balance or invoice number
+        from memory.
+      </p>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table class="process-table">
+      <thead>
+        <tr>
+          <th>Process step</th>
+          <th>Activity</th>
+          <th>Input — data needed</th>
+          <th>Output — data produced</th>
+          <th>Automation value</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="step-name">1 · Customer submits payment proof<span class="step-ref">WhatsApp</span></td>
+          <td>Customer sends a screenshot of their bank transfer or SkillsFuture claim, or just asks about payment in words.</td>
+          <td>—  (customer-initiated)</td>
+          <td>Raw WhatsApp message ± image</td>
+          <td>Payment can be submitted the moment it's made — no portal to log into, no separate upload step.</td>
+        </tr>
+        <tr>
+          <td class="step-name gateway">2 · Routed to Module C<span class="step-ref">Gateway + Router</span></td>
+          <td>System confirms this is a payment-related message and hands it to the payment pipeline.</td>
+          <td>Message + media, if any</td>
+          <td>Routed to Module C</td>
+          <td>Same reliable dispatch as every request type.</td>
+        </tr>
+        <tr>
+          <td class="step-name decision">3 · Screenshot check<span class="step-ref">key fork</span></td>
+          <td>System checks, in plain code, whether an image is attached — this decision is never left to an AI's discretion.</td>
+          <td>Message payload</td>
+          <td>Vision path, or conversational path</td>
+          <td>Guarantees money is only ever moved by the deterministic path below, no matter how the request is phrased.</td>
+        </tr>
+        <tr>
+          <td class="step-name ext">3b · Agent C reasons about intent<span class="step-ref">no image present</span></td>
+          <td>Agent C reads the message together with recent conversation history and works out what's actually being asked — a receipt, a balance check, or help finding a lost invoice number.</td>
+          <td>Message, conversation history</td>
+          <td>A classified intent</td>
+          <td>Understands a real conversation ("did that go through yet?") instead of requiring an exact phrase or command.</td>
+        </tr>
+        <tr>
+          <td class="step-name ext">3c · Agent C picks &amp; runs a tool<span class="step-ref">Balance / Receipt / Invoice / Status</span></td>
+          <td>Agent C selects exactly one of its four information tools and calls it — it never answers a "what do I owe" question from memory or guesswork.</td>
+          <td>Classified intent</td>
+          <td>A tool call against the live enrollment/payment record</td>
+          <td>The same guarantee as the vision path: a number the customer sees always traces back to a live lookup, never the model's own arithmetic.</td>
+        </tr>
+        <tr>
+          <td class="step-name ext">3d · Agent C composes the reply<span class="step-ref">facts → natural language</span></td>
+          <td>The tool's exact figures (an amount, an invoice number, a code) are wrapped in a short, natural WhatsApp reply — the wording is the model's, the numbers are not.</td>
+          <td>Tool output</td>
+          <td>Finished WhatsApp reply</td>
+          <td>Reads like a helpful reply from a person, while remaining impossible to hallucinate a wrong balance or invoice number.</td>
+        </tr>
+        <tr>
+          <td class="step-name backend">4 · Invoice is resolved<span class="step-ref">auto-lookup</span></td>
+          <td>The invoice this proof belongs to is identified — from the command, from the message text, or (if neither states one) the customer's own latest outstanding invoice.</td>
+          <td>Message text, customer's enrollment history</td>
+          <td>Resolved invoice</td>
+          <td>A customer who forgets to type the invoice number still gets processed correctly in the common case — one less way to get stuck.</td>
+        </tr>
+        <tr>
+          <td class="step-name decision">5 · Invoice validity check<span class="step-ref">safeguard</span></td>
+          <td>System checks the invoice exists, belongs to this customer, and isn't already fully paid.</td>
+          <td>Resolved invoice, customer identity</td>
+          <td>Pass, or a specific explanation</td>
+          <td>Prevents a screenshot being wrongly applied to someone else's invoice, or a paid invoice being processed twice.</td>
+        </tr>
+        <tr>
+          <td class="step-name backend">6 · Remaining balance computed<span class="step-ref">per proof type</span></td>
+          <td>System works out exactly how much is still owed — separately for a SkillsFuture claim and a PayNow transfer, since one invoice can need either or both.</td>
+          <td>Invoice fee/subsidy split, proofs already confirmed</td>
+          <td>Outstanding amount per type</td>
+          <td>Handles split payments correctly without a person manually tracking which part of an invoice has been settled.</td>
+        </tr>
+        <tr>
+          <td class="step-name ext">7 · Vision model reads the screenshot<span class="step-ref">the AI step</span></td>
+          <td>An AI model actually looks at the image and reports what it sees: which kind of proof it is, the amount, a reference, and how confident it is.</td>
+          <td>The screenshot</td>
+          <td>Extracted amount, type, reference, confidence</td>
+          <td>Reads a bank or SkillsFuture screenshot as fast as a person could glance at one — but see the next step for what it's <em>not</em> allowed to decide.</td>
+        </tr>
+        <tr>
+          <td class="step-name decision">8 · Evaluate against the balance<span class="step-ref">not the AI's call</span></td>
+          <td>Fixed rules — not the AI — decide whether the extracted amount and type genuinely match what's still owed, within a sensible confidence bar.</td>
+          <td>AI extraction, outstanding balance</td>
+          <td>Verdict: confirmed, mismatch, or unreadable</td>
+          <td>The business rule that actually controls money never changes just because the AI model behind it does — and it's the same rule for every customer, every time.</td>
+        </tr>
+        <tr>
+          <td class="step-name db">9 · Attempt is recorded<span class="step-ref">every outcome</span></td>
+          <td>Whatever the verdict, this attempt is saved — including mismatches and unreadable images, not just successes.</td>
+          <td>Verdict + extracted details</td>
+          <td>Payment attempt record</td>
+          <td>A complete, honest history of every screenshot ever submitted for this invoice — including the failed attempts, for accountability.</td>
+        </tr>
+        <tr>
+          <td class="step-name backend">10a · Confirmed — receipt issued<span class="step-ref">happy path</span></td>
+          <td>A formal receipt is generated for this proof and emailed immediately.</td>
+          <td>Confirmed payment details</td>
+          <td>Receipt PDF, sent email</td>
+          <td>A proper receipt in seconds, every time — no one has to remember to issue it.</td>
+        </tr>
+        <tr>
+          <td class="step-name decision">10b · Full invoice check<span class="step-ref">complete vs partial</span></td>
+          <td>System checks whether every proof confirmed so far now adds up to the full course fee.</td>
+          <td>All confirmed proofs for this invoice</td>
+          <td>"Fully paid" or "here's what's still owed"</td>
+          <td>A split SkillsFuture-plus-PayNow invoice is tracked automatically — the customer is told exactly what's left, never asked to guess.</td>
+        </tr>
+        <tr>
+          <td class="step-name backend">10c · Mismatch — flagged for review<span class="step-ref">human safety net</span></td>
+          <td>A screenshot that doesn't match the outstanding balance is never silently accepted or rejected — it's handed to a staff member, with the full detail attached.</td>
+          <td>Mismatch details</td>
+          <td>Internal staff task + email; customer told it's under review</td>
+          <td>Genuine ambiguity goes to a person instead of a wrong automatic decision — the safety net that makes the automation trustworthy.</td>
+        </tr>
+        <tr>
+          <td class="step-name gateway">11 · Reply delivered<span class="step-ref">Gateway</span></td>
+          <td>Whichever outcome occurred, the customer is told clearly what happened and what, if anything, to do next.</td>
+          <td>Outcome + reply text</td>
+          <td>Delivered WhatsApp message</td>
+          <td class="automation">From screenshot to confirmed receipt (or a clear next step) in seconds, any hour, for any number of customers submitting proof at once.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="eyebrow" style="margin-top:44px;">For engineers — implementation trace</p>
+  <h2 style="margin-top:0;">Same journey, at file-and-function level</h2>
+  <p class="dek">Exact code references, including the vision prompt and the evaluation rule.</p>
+
+  <h2><span class="step-scope">Stage 1 — Arrival &amp; the key fork</span>module_c.py: run()</h2>
+  <div class="steps">
+    <div class="step">
+      <span class="step-num gateway">01</span>
+      <div><p class="step-title">Gateway → Orchestrator → Router <span class="tag gateway">gateway</span></p>
+      <p class="step-text">Same as Instance 01, dispatching to <code>module_c.run(payload, route)</code> once intent = PAYMENT (or any message with an attached image, which the router treats as payment intent regardless of text).</p></div>
+    </div>
+    <div class="step">
+      <span class="step-num decision">02</span>
+      <div><p class="step-title">if data: return payments.process_payment(...) <span class="tag decision">decision</span></p>
+      <p class="step-text">In <code>module_c.py: run()</code> — <code>data, mimetype = context.media()</code>. This plain <code>if</code> is the entire "which path" decision; there is no LLM call before it. Only when <code>data</code> is empty does the function fall through to the conversational agent.</p></div>
+    </div>
+  </div>
+
+  <h2><span class="step-scope">Stage 1b — No image: the conversational agent's tool-use loop</span>module_c.py: _run_agent()</h2>
+  <div class="steps">
+    <div class="step">
+      <span class="step-num ext">03a</span>
+      <div><p class="step-title">Read the request <span class="tag ext">OpenAI</span></p>
+      <p class="step-text"><code>_run_agent(body)</code> pulls <code>repo.recent_memory(wid, limit=8)</code> and folds it into the task prompt alongside the new message — so "did my payment go through?" right after an earlier invoice mention still resolves correctly.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-num ext">03b</span>
+      <div><p class="step-title">Reason about intent <span class="tag ext">OpenAI</span></p>
+      <p class="step-text"><code>kickoff_agent(role="Q&amp;M Payment &amp; Accounts Agent", tools=MODULE_C_TOOLS)</code> — GPT-4o-mini classifies the request against the backstory's explicit playbook: receipt request → resend it; "how much do I owe" → check balance, don't guess; invoice number missing → look it up rather than ask the customer to.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-num ext">03c</span>
+      <div><p class="step-title">Pick the matching tool <span class="tag ext">OpenAI</span></p>
+      <p class="step-text">One of <code>MODULE_C_TOOLS</code>: <em>Payment Balance</em> (<code>outstanding_balance_text()</code>), <em>Resend Receipt</em> (<code>resend_receipt()</code>), <em>Resend Invoice</em> (<code>resend_invoice()</code>, shared with Module B), or <em>Enrollment Status</em> (<code>status_text()</code>, shared with Module B). <em>Settle Payment</em> is technically in the list too, but with no image in context it would just report "No screenshot received" — the agent's own instructions steer it away from calling that tool here.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-num backend">03d</span>
+      <div><p class="step-title">Tool executes against the real record <span class="tag backend">backend</span></p>
+      <p class="step-text">Every one of these tools reads <code>whatsapp_id</code>/<code>phone</code> from <code>context</code> (never an LLM-supplied argument) and queries the exact same <code>payments</code>/<code>enrollments</code> tables the vision path writes to — there are not two sources of truth for what's owed.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-num ext">03e</span>
+      <div><p class="step-title">Compose the reply <span class="tag ext">OpenAI</span></p>
+      <p class="step-text">The backstory is explicit: any amount, invoice number, or code a tool returns "must be carried over exactly — never round, reword, or guess one." The LLM's only remaining job is natural phrasing around those facts.</p></div>
+    </div>
+  </div>
+
+  <h2><span class="step-scope">Stage 2 — Resolving the invoice</span>services/payments.py: process_payment() (part 1)</h2>
+  <div class="steps">
+    <div class="step">
+      <span class="step-num backend">03</span>
+      <div><p class="step-title">Invoice number resolution <span class="tag backend">backend</span></p>
+      <p class="step-text">Priority order: the <code>/pay</code> command's argument; else <code>_INVOICE_RE</code> matched against the free-text caption (e.g. "pay for INV-2026-0861"); else, inside <code>process_payment()</code>, <code>repo.latest_enrollment(whatsapp_id)</code> — but only used automatically if that enrollment's status is <code>invoice_sent</code> or <code>awaiting_payment</code>.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-num decision">04</span>
+      <div><p class="step-title">Validity checks <span class="tag decision">decision</span></p>
+      <p class="step-text"><code>repo.get_enrollment_by_invoice()</code> not found; <code>whatsapp_id</code>/<code>phone</code> mismatch; or <code>status in ("paid","receipt_issued")</code> — each returns its own specific reply and stops here.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-num backend">05</span>
+      <div><p class="step-title">_remaining_balances(enrollment, confirmed) <span class="tag backend">backend</span></p>
+      <p class="step-text">Sums confirmed proofs by <code>payment_type</code> so far, subtracts from <code>sf_subsidy</code> and <code>net_payable</code> respectively — the per-type outstanding amounts the vision step's result will be checked against.</p></div>
+    </div>
+  </div>
+
+  <h2><span class="step-scope">Stage 3 — Vision extraction and the evaluation boundary</span>services/payments.py: extract_payment_proof() + _evaluate_proof()</h2>
+  <div class="steps">
+    <div class="step">
+      <span class="step-num ext">06</span>
+      <div><p class="step-title">extract_payment_proof(image_b64, mimetype) <span class="tag ext">OpenAI</span></p>
+      <p class="step-text">Calls <code>settings.openai_vision_model</code> (GPT-4o) with <code>temperature=0</code> and a strict-JSON prompt (<code>_VISION_PROMPT</code>) asking for <code>is_payment_proof</code>, <code>readable</code>, <code>payment_type</code>, <code>detected_amount</code>, <code>reference</code>, <code>confidence</code>, explicitly instructed to use <code>null</code> rather than invent a value. Returns raw facts only — no verdict.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-num decision">07</span>
+      <div><p class="step-title">_evaluate_proof(extracted, remaining) <span class="tag decision">decision</span></p>
+      <p class="step-text">Pure business logic, zero model calls: unreadable if not <code>readable</code>/not a recognised proof/no amount; mismatch if the type isn't one of the two known types, the relevant balance is already ≤0, the amount exceeds balance <code>+ _TOLERANCE (0.01)</code>, or <code>confidence &lt; settings.auto_confirm_threshold</code>; otherwise confirmed.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-num db">08</span>
+      <div><p class="step-title">Record the attempt <span class="tag db">database</span></p>
+      <p class="step-text"><code>repo.pending_payment_for_enrollment()</code> — if the invoice's placeholder row (from enrollment) is still pending, <code>repo.update_payment()</code> resolves it in place for the <em>first</em> proof; every subsequent proof (a second type, or a retry) calls <code>repo.record_payment()</code>, inserting a new row — preserving full attempt history either way.</p></div>
+    </div>
+  </div>
+
+  <h2><span class="step-scope">Stage 4 — Acting on the verdict</span>_confirm_proof() / _flag_mismatch() / inline unreadable reply</h2>
+  <div class="steps">
+    <div class="step">
+      <span class="step-num backend">09</span>
+      <div><p class="step-title">confirmed → _confirm_proof(enrollment, payment) <span class="tag backend">backend</span></p>
+      <p class="step-text"><code>new_receipt_no()</code>; <code>generate_receipt_pdf()</code>; <code>send_email()</code> with the PDF attached. Then sums all confirmed proofs — if the total now covers <code>enrollment["fee"]</code> within tolerance, <code>repo.update_enrollment(status="receipt_issued")</code>; otherwise the reply itemises exactly what's still needed (SkillsFuture and/or PayNow) via <code>_remaining_balances()</code> again.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-num backend">10</span>
+      <div><p class="step-title">mismatch → _flag_mismatch(enrollment, payment) <span class="tag backend">backend</span></p>
+      <p class="step-text"><code>repo.add_staff_task(reason="payment_mismatch", module="C", payload=raw_extract)</code>; <code>send_email(settings.staff_email, ...)</code> with the full detected detail. The customer's reply never states a rejection — only that it's under review.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-num backend">11</span>
+      <div><p class="step-title">unreadable → inline reply <span class="tag backend">backend</span></p>
+      <p class="step-text">No staff task, no email — just a request to resend a clearer screenshot. The attempt is still recorded (step 08) so a pattern of repeated unreadable submissions is visible in the data.</p></div>
+    </div>
+  </div>
+
+  <p class="footnote">Q&amp;M Dental Group — WhatsApp Enquiry &amp; Enrollment System · source: app/crews/module_c.py, app/tools/payment_tools.py, app/services/payments.py, app/pdf.py, app/repositories.py</p>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,557 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Flow — Course Enrollment (Module B — Agent B)</title>
+<style>
+  :root {
+    --paper: #F5F2EA;
+    --card: #FFFFFF;
+    --card-alt: #FBF9F3;
+    --ink: #1E2430;
+    --ink-dim: #5B6270;
+    --line: #DED7C4;
+    --line-strong: #C9C0A8;
+
+    --gateway: #1F7A5C;   --gateway-bg: rgba(31,122,92,0.09);
+    --backend: #35478C;   --backend-bg: rgba(53,71,140,0.08);
+    --db: #7C4A9E;        --db-bg: rgba(124,74,158,0.08);
+    --ext: #8A6A2F;       --ext-bg: rgba(150,121,74,0.10);
+    --decision: #A3432E;  --decision-bg: rgba(163,67,46,0.08);
+
+    --font-display: -apple-system, BlinkMacSystemFont, "Segoe UI Semibold", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    --font-mono: ui-monospace, "Cascadia Code", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #12151B; --card: #181C24; --card-alt: #1E2330;
+      --ink: #E9E6DC; --ink-dim: #9CA0AC;
+      --line: #2B303C; --line-strong: #3A4050;
+      --gateway: #46CB9B; --gateway-bg: rgba(70,203,155,0.10);
+      --backend: #93A2F2; --backend-bg: rgba(147,162,242,0.10);
+      --db: #D19DF0; --db-bg: rgba(209,157,240,0.10);
+      --ext: #E4C27E; --ext-bg: rgba(228,194,126,0.10);
+      --decision: #E28870; --decision-bg: rgba(226,136,112,0.10);
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--font-body); -webkit-font-smoothing: antialiased; }
+  .page { max-width: 980px; margin: 0 auto; padding: 48px 24px 90px; }
+
+  .eyebrow { font-family: var(--font-mono); font-size: .72rem; letter-spacing: .16em; text-transform: uppercase; color: var(--backend); margin: 0 0 10px; }
+  h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(1.5rem, 1.1rem + 1.6vw, 2.05rem); letter-spacing: -0.01em; line-height: 1.15; text-wrap: balance; margin: 0 0 14px; }
+  .dek { font-size: .98rem; line-height: 1.6; color: var(--ink-dim); max-width: 68ch; margin: 0 0 22px; }
+  .dek code, p code, li code, td code { font-family: var(--font-mono); font-size: .87em; color: var(--ink); background: var(--card-alt); border: 1px solid var(--line); border-radius: 3px; padding: 1px 5px; }
+
+  .sample-box { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 30px; }
+  .sample {
+    font-family: var(--font-mono); font-size: .8rem; padding: 8px 12px;
+    border: 1px solid var(--line); border-radius: 5px; background: var(--card-alt); color: var(--ink-dim);
+  }
+  .sample b { color: var(--ink); font-weight: 600; }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 10px 20px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 6px; background: var(--card-alt); margin-bottom: 34px; }
+  .legend-item { display: flex; align-items: center; gap: 8px; font-family: var(--font-mono); font-size: .74rem; color: var(--ink-dim); }
+  .swatch { width: 10px; height: 10px; border-radius: 2px; flex: none; }
+  .swatch.diamond { border-radius: 0; transform: rotate(45deg); }
+
+  .diagram-frame {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--card);
+    padding: 18px;
+    margin-bottom: 12px;
+    overflow-x: auto;
+  }
+  .diagram-frame svg { display: block; margin: 0 auto; width: 100%; max-width: 640px; height: auto; }
+  figure.diagram-frame { margin: 0 0 12px; }
+  figcaption {
+    font-size: .84rem; line-height: 1.55; color: var(--ink-dim);
+    max-width: 66ch; margin: 0 0 28px;
+  }
+
+  .callout {
+    margin: 0 0 34px; padding: 16px 18px; border: 1px solid var(--line-strong); border-radius: 6px;
+    background: var(--card-alt); font-size: .88rem; line-height: 1.6; color: var(--ink-dim);
+  }
+  .callout strong { color: var(--ink); }
+  .callout h3 { margin: 0 0 8px; font-family: var(--font-display); font-size: .98rem; color: var(--ink); }
+
+  .agent-profile {
+    display: flex; align-items: center; gap: 16px;
+    padding: 16px 18px; border: 1px solid var(--line); border-radius: 8px;
+    background: var(--backend-bg); margin: 4px 0 28px;
+  }
+  .agent-avatar {
+    width: 46px; height: 46px; border-radius: 10px; flex: none;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--backend); color: var(--card);
+    font-family: var(--font-display); font-weight: 700; font-size: 1.15rem;
+  }
+  .agent-role { font-weight: 700; font-size: .96rem; margin: 0 0 3px; }
+  .agent-sub { font-size: .83rem; color: var(--ink-dim); margin: 0; line-height: 1.5; }
+  .agent-sub code { font-family: var(--font-mono); font-size: .82em; }
+
+  .table-wrap {
+    overflow-x: auto; margin: 0 0 16px;
+    border: 1px solid var(--line); border-radius: 8px;
+  }
+  .process-table { border-collapse: collapse; width: 100%; min-width: 1000px; font-size: .83rem; }
+  .process-table th, .process-table td { padding: 12px 14px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); }
+  .process-table thead th {
+    font-family: var(--font-mono); font-size: .66rem; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--ink-dim); background: var(--card-alt); border-bottom: 1px solid var(--line-strong); white-space: nowrap;
+  }
+  .process-table tbody tr:last-child td { border-bottom: none; }
+  .process-table td { color: var(--ink-dim); line-height: 1.55; }
+  .process-table td.step-name { font-weight: 600; color: var(--ink); border-left: 3px solid var(--line-strong); }
+  .process-table td.step-name .step-ref { display: block; font-family: var(--font-mono); font-weight: 400; font-size: .68rem; color: var(--ink-dim); margin-top: 2px; }
+  .process-table td.step-name.gateway { border-left-color: var(--gateway); }
+  .process-table td.step-name.backend { border-left-color: var(--backend); }
+  .process-table td.step-name.db { border-left-color: var(--db); }
+  .process-table td.step-name.decision { border-left-color: var(--decision); }
+  .process-table td.automation { color: var(--ink); }
+
+  h2 { font-family: var(--font-display); font-size: 1.2rem; font-weight: 700; margin: 44px 0 6px; }
+  h2 .step-scope { font-family: var(--font-mono); font-size: .7rem; color: var(--ink-dim); font-weight: 400; text-transform: uppercase; letter-spacing: .08em; display: block; margin-bottom: 6px; }
+
+  .steps { display: flex; flex-direction: column; gap: 0; border-top: 1px solid var(--line); margin-top: 18px; }
+  .step { display: grid; grid-template-columns: 34px 1fr; column-gap: 14px; padding: 14px 0; border-bottom: 1px dashed var(--line); }
+  .step-num { font-family: var(--font-mono); font-size: .74rem; padding-top: 3px; }
+  .step-num.gateway { color: var(--gateway); }
+  .step-num.backend { color: var(--backend); }
+  .step-num.db { color: var(--db); }
+  .step-num.ext { color: var(--ext); }
+  .step-num.decision { color: var(--decision); }
+  .step-title { font-weight: 600; font-size: .94rem; margin: 0 0 4px; }
+  .step-title .tag {
+    font-family: var(--font-mono); font-size: .66rem; padding: 2px 7px; border-radius: 3px;
+    margin-left: 8px; vertical-align: 1px; text-transform: uppercase; letter-spacing: .04em;
+  }
+  .tag.gateway { color: var(--gateway); background: var(--gateway-bg); }
+  .tag.backend { color: var(--backend); background: var(--backend-bg); }
+  .tag.db { color: var(--db); background: var(--db-bg); }
+  .tag.ext { color: var(--ext); background: var(--ext-bg); }
+  .tag.decision { color: var(--decision); background: var(--decision-bg); }
+  .step-text { font-size: .87rem; line-height: 1.6; color: var(--ink-dim); margin: 0; max-width: 74ch; }
+
+  .footnote { margin-top: 22px; font-family: var(--font-mono); font-size: .72rem; color: var(--ink-dim); opacity: .8; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <p class="eyebrow">Instance 3 of N — per-feature execution trace</p>
+  <h1>Course Enrollment</h1>
+  <p class="dek">
+    Traces what it actually takes for a <strong>registered</strong> customer to end up successfully
+    enrolled: identifying the course and a specific intake, two guard checks that protect data quality
+    and prevent duplicate bookings, and everything a "successful" enrollment actually creates — a
+    database record, a reserved seat, a generated invoice, and a delivered email — before Agent B ever
+    confirms it back on WhatsApp.
+  </p>
+
+  <div class="sample-box">
+    <span class="sample">Command shortcut: <b>/enroll C2601|SH2601</b></span>
+    <span class="sample">Code pair in free text: <b>"C2601 and SH2601 please"</b></span>
+    <span class="sample">Conversational: <b>"sign me up for the dental assisting course"</b></span>
+  </div>
+
+  <div class="legend">
+    <div class="legend-item"><span class="swatch" style="background:var(--gateway)"></span>Gateway (whatsapp-server)</div>
+    <div class="legend-item"><span class="swatch" style="background:var(--backend)"></span>Backend / agent logic</div>
+    <div class="legend-item"><span class="swatch" style="background:var(--db)"></span>PostgreSQL read/write</div>
+    <div class="legend-item"><span class="swatch" style="background:var(--ext)"></span>OpenAI (external LLM)</div>
+    <div class="legend-item"><span class="swatch diamond" style="background:var(--decision)"></span>Decision / branch</div>
+  </div>
+
+  <figure class="diagram-frame">
+    <svg viewBox="0 0 900 1510" role="img" aria-label="Flowchart: an enrollment request is resolved either deterministically or by Agent B reasoning over the conversation, then passes a field-validation gate and a duplicate-enrollment gate before the system creates the enrollment record, reserves the seat, generates and emails the invoice, opens a pending payment record, and delivers a confirmation reply.">
+      <defs>
+        <marker id="arrow3" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--ink-dim)"></path>
+        </marker>
+      </defs>
+
+      <!-- spine connectors -->
+      <g fill="none" stroke="var(--ink-dim)" stroke-width="1.75" marker-end="url(#arrow3)">
+        <line x1="450" y1="67"   x2="450" y2="106"></line>
+        <line x1="450" y1="162"  x2="450" y2="203"></line>
+        <line x1="340" y1="245"  x2="197" y2="316"></line>
+        <line x1="560" y1="245"  x2="703" y2="316"></line>
+        <line x1="190" y1="372"  x2="437" y2="426"></line>
+        <line x1="710" y1="372"  x2="463" y2="426"></line>
+        <line x1="450" y1="482"  x2="450" y2="523"></line>
+        <line x1="450" y1="605"  x2="450" y2="633"></line>
+        <line x1="560" y1="565"  x2="598" y2="565"></line>
+        <line x1="450" y1="715"  x2="450" y2="756"></line>
+        <line x1="560" y1="675"  x2="598" y2="675"></line>
+        <line x1="450" y1="812"  x2="450" y2="844"></line>
+        <line x1="450" y1="930"  x2="450" y2="971"></line>
+        <line x1="450" y1="1027" x2="450" y2="1061"></line>
+        <line x1="450" y1="1117" x2="450" y2="1151"></line>
+        <line x1="450" y1="1207" x2="450" y2="1241"></line>
+        <line x1="450" y1="1297" x2="450" y2="1331"></line>
+        <line x1="450" y1="1387" x2="450" y2="1416"></line>
+      </g>
+      <path d="M860,565 L880,565 L880,1360 L600,1345" fill="none" stroke="var(--ink-dim)" stroke-width="1.75" marker-end="url(#arrow3)"></path>
+      <path d="M730,702 L730,1360 L600,1375" fill="none" stroke="var(--ink-dim)" stroke-width="1.75" marker-end="url(#arrow3)"></path>
+
+      <!-- branch edge labels -->
+      <g font-size="11" fill="var(--ink-dim)" text-anchor="middle">
+        <text x="248" y="288">fully specified</text>
+        <text x="660" y="288">needs reasoning</text>
+        <text x="600" y="555">no</text>
+        <text x="472" y="622">yes</text>
+        <text x="600" y="665">yes</text>
+        <text x="472" y="740">no</text>
+      </g>
+
+      <!-- N1 start pill -->
+      <rect x="300" y="13" width="300" height="54" rx="27" fill="var(--card)" stroke="var(--ink-dim)" stroke-width="1.5"></rect>
+      <text x="450" y="34" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">Customer wants to enroll</text>
+      <text x="450" y="50" text-anchor="middle" font-size="10" fill="var(--ink-dim)">shortcut, code pair, or plain conversation</text>
+
+      <!-- N2 gateway+orchestrator+router -->
+      <rect x="300" y="108" width="300" height="54" rx="8" fill="var(--card)" stroke="var(--gateway)" stroke-width="1.5"></rect>
+      <text x="450" y="130" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">Gateway → Orchestrator → Router</text>
+      <text x="450" y="146" text-anchor="middle" font-size="10" fill="var(--ink-dim)">same as Instance 01 — routed here</text>
+
+      <!-- D0 decision -->
+      <polygon points="450,205 560,245 450,285 340,245" fill="var(--card)" stroke="var(--decision)" stroke-width="1.5"></polygon>
+      <text x="450" y="241" text-anchor="middle" font-size="11" fill="var(--ink)">fully</text>
+      <text x="450" y="255" text-anchor="middle" font-size="11" fill="var(--ink)">specified?</text>
+
+      <!-- N4L deterministic -->
+      <rect x="40" y="318" width="300" height="54" rx="8" fill="var(--card)" stroke="var(--backend)" stroke-width="1.5"></rect>
+      <text x="190" y="340" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">Deterministic match</text>
+      <text x="190" y="356" text-anchor="middle" font-size="10" fill="var(--ink-dim)">command, or course+intake codes given</text>
+
+      <!-- N4R agent -->
+      <rect x="560" y="318" width="300" height="54" rx="8" fill="var(--card)" stroke="var(--backend)" stroke-width="1.5"></rect>
+      <text x="710" y="340" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">Agent B reasons it out</text>
+      <text x="710" y="356" text-anchor="middle" font-size="10" fill="var(--ink-dim)">resolves course &amp; intake; may ask &amp; wait</text>
+
+      <!-- N6 merge -->
+      <rect x="300" y="428" width="300" height="54" rx="8" fill="var(--card)" stroke="var(--backend)" stroke-width="1.5"></rect>
+      <text x="450" y="450" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">Course + intake + profile ready</text>
+      <text x="450" y="466" text-anchor="middle" font-size="10" fill="var(--ink-dim)">name/NRIC/email auto-filled from profile</text>
+
+      <!-- D_valid decision -->
+      <polygon points="450,525 560,565 450,605 340,565" fill="var(--card)" stroke="var(--decision)" stroke-width="1.5"></polygon>
+      <text x="450" y="560" text-anchor="middle" font-size="11" fill="var(--ink)">fields &amp;</text>
+      <text x="450" y="574" text-anchor="middle" font-size="11" fill="var(--ink)">intake valid?</text>
+
+      <!-- N_fix -->
+      <rect x="600" y="538" width="260" height="54" rx="8" fill="var(--card)" stroke="var(--backend)" stroke-width="1.5"></rect>
+      <text x="730" y="560" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">Reply: fix &amp; resend</text>
+      <text x="730" y="576" text-anchor="middle" font-size="10" fill="var(--ink-dim)">missing field, bad format, or bad intake</text>
+
+      <!-- D_dup decision -->
+      <polygon points="450,635 560,675 450,715 340,675" fill="var(--card)" stroke="var(--decision)" stroke-width="1.5"></polygon>
+      <text x="450" y="670" text-anchor="middle" font-size="11" fill="var(--ink)">already enrolled</text>
+      <text x="450" y="684" text-anchor="middle" font-size="11" fill="var(--ink)">this course+date?</text>
+
+      <!-- N_existing -->
+      <rect x="600" y="648" width="260" height="54" rx="8" fill="var(--card)" stroke="var(--backend)" stroke-width="1.5"></rect>
+      <text x="730" y="670" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">Reply: show existing</text>
+      <text x="730" y="686" text-anchor="middle" font-size="10" fill="var(--ink-dim)">status + pay/resend-invoice hint</text>
+
+      <!-- N9 create -->
+      <rect x="300" y="758" width="300" height="54" rx="8" fill="var(--card)" stroke="var(--backend)" stroke-width="1.5"></rect>
+      <text x="450" y="780" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">Compute fee &amp; create enrollment</text>
+      <text x="450" y="796" text-anchor="middle" font-size="10" fill="var(--ink-dim)">compute_fee() → create_enrollment()</text>
+
+      <!-- DB cylinder -->
+      <rect x="340" y="860" width="220" height="56" fill="var(--card)"></rect>
+      <line x1="340" y1="860" x2="340" y2="916" stroke="var(--db)" stroke-width="1.5"></line>
+      <line x1="560" y1="860" x2="560" y2="916" stroke="var(--db)" stroke-width="1.5"></line>
+      <ellipse cx="450" cy="916" rx="110" ry="14" fill="var(--card)" stroke="var(--db)" stroke-width="1.5"></ellipse>
+      <ellipse cx="450" cy="860" rx="110" ry="14" fill="var(--card)" stroke="var(--db)" stroke-width="1.5"></ellipse>
+      <text x="450" y="890" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">enrollments · schedules</text>
+      <text x="450" y="906" text-anchor="middle" font-size="10" fill="var(--ink-dim)">seat +1 · status → enrolled</text>
+
+      <!-- N11 pdf -->
+      <rect x="300" y="973" width="300" height="54" rx="8" fill="var(--card)" stroke="var(--backend)" stroke-width="1.5"></rect>
+      <text x="450" y="995" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">Generate invoice PDF</text>
+      <text x="450" y="1011" text-anchor="middle" font-size="10" fill="var(--ink-dim)">generate_invoice_pdf() — PayNow QR embedded</text>
+
+      <!-- N12 email -->
+      <rect x="300" y="1063" width="300" height="54" rx="8" fill="var(--card)" stroke="var(--backend)" stroke-width="1.5"></rect>
+      <text x="450" y="1085" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">Email the invoice</text>
+      <text x="450" y="1101" text-anchor="middle" font-size="10" fill="var(--ink-dim)">send_email() → participant's address</text>
+
+      <!-- N13 finalize -->
+      <rect x="300" y="1153" width="300" height="54" rx="8" fill="var(--card)" stroke="var(--backend)" stroke-width="1.5"></rect>
+      <text x="450" y="1175" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">Advance status &amp; log payment</text>
+      <text x="450" y="1191" text-anchor="middle" font-size="10" fill="var(--ink-dim)">status → invoice_sent · payment row opened</text>
+
+      <!-- N14 compose -->
+      <rect x="300" y="1243" width="300" height="54" rx="8" fill="var(--card)" stroke="var(--backend)" stroke-width="1.5"></rect>
+      <text x="450" y="1265" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">Compose confirmation reply</text>
+      <text x="450" y="1281" text-anchor="middle" font-size="10" fill="var(--ink-dim)">course, fee, invoice no., next step</text>
+
+      <!-- N15 gateway delivery -->
+      <rect x="300" y="1333" width="300" height="54" rx="8" fill="var(--card)" stroke="var(--gateway)" stroke-width="1.5"></rect>
+      <text x="450" y="1355" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">Gateway delivery</text>
+      <text x="450" y="1371" text-anchor="middle" font-size="10" fill="var(--ink-dim)">send_whatsapp() → POST /send-reply</text>
+
+      <!-- N16 end pill -->
+      <rect x="300" y="1418" width="300" height="54" rx="27" fill="var(--card)" stroke="var(--ink-dim)" stroke-width="1.5"></rect>
+      <text x="450" y="1450" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">Customer sees the confirmation</text>
+    </svg>
+    <figcaption>
+      "Successful" enrollment is the path down the middle: two guard checks pass, then five things
+      happen in sequence — a record is created, a seat is taken, an invoice is generated, that invoice
+      is emailed, and a payment record is opened ready for
+      <a href="05_payment_verification.html">Instance 05 — Payment Verification</a>. If Agent B can't
+      yet tell which intake the customer means, it asks and waits for the next message — the same
+      multi-turn pattern shown in full in <a href="02_new_customer_registration.html">Instance 02</a> —
+      rather than guessing or silently booking the next available date.
+    </figcaption>
+  </figure>
+
+  <div class="callout">
+    <h3>What "successful" actually means here</h3>
+    A successful enrollment is not just a database row. By the time the customer sees a confirmation,
+    the system has already: reserved their seat on that specific intake, generated a legally-usable
+    invoice PDF with an embedded PayNow QR code, emailed it to their registered address, and opened a
+    payment record waiting for Module C to update the moment proof of payment arrives. All of that
+    happens inside one WhatsApp turn — the same guarantees whether the request came from a typed
+    shortcut or a casual sentence. If the customer later needs to back out, see
+    <a href="04_course_cancellation.html">Instance 04 — Course Cancellation &amp; Credit Note</a> for how
+    every one of these effects gets reversed.
+  </div>
+
+  <p class="eyebrow">For stakeholders — process, data &amp; automation value</p>
+  <h2 style="margin-top:0;">What happens at each step, and what it replaces</h2>
+  <p class="dek">
+    A stakeholder view of the same journey: what happens, what information it needs, what it produces,
+    and what running it automatically buys the business over a staff member manually processing an
+    enrollment form, checking a seating chart, and drafting an invoice.
+  </p>
+
+  <div class="agent-profile">
+    <div class="agent-avatar">B</div>
+    <div>
+      <p class="agent-role">Agent B — the Enrollment Pipeline Agent</p>
+      <p class="agent-sub">
+        Persona: <code>"Q&amp;M Enrollment Pipeline Agent"</code>. Owns the conversational branch only —
+        the <code>/enroll</code> shortcut and the code-pair shortcut skip the agent entirely for speed.
+        Hard rule: never enrolls anyone without a specific, participant-confirmed intake — it will ask
+        and wait rather than default to the next available date.
+      </p>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table class="process-table">
+      <thead>
+        <tr>
+          <th>Process step</th>
+          <th>Activity</th>
+          <th>Input — data needed</th>
+          <th>Output — data produced</th>
+          <th>Automation value</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="step-name">1 · Customer expresses intent to enroll<span class="step-ref">WhatsApp</span></td>
+          <td>Customer asks to sign up — via a shortcut, or in their own words.</td>
+          <td>—  (customer-initiated)</td>
+          <td>Raw WhatsApp message</td>
+          <td>Enrolling happens inside the same chat — no separate enrollment portal or account to create.</td>
+        </tr>
+        <tr>
+          <td class="step-name gateway">2 · Routed to the enrollment pipeline<span class="step-ref">Gateway + Router</span></td>
+          <td>System confirms this is an enrollment request and hands it to Module B.</td>
+          <td>Message + recent chat history</td>
+          <td>Routed to the enrollment agent</td>
+          <td>Same reliable dispatch as every request type — no manual triage of "which desk handles this."</td>
+        </tr>
+        <tr>
+          <td class="step-name decision">3 · Message is read<span class="step-ref">fully specified?</span></td>
+          <td>System checks whether the course and a specific intake are already fully given, or need to be worked out through conversation.</td>
+          <td>Message text</td>
+          <td>Which handling path to use</td>
+          <td>Anyone who already knows the codes gets instant processing; a casual "sign me up" still works.</td>
+        </tr>
+        <tr>
+          <td class="step-name backend">4a · Deterministic match<span class="step-ref">shortcut / code pair</span></td>
+          <td>Course and intake are read directly from the exact command or the two codes given.</td>
+          <td>Command or code-pair text</td>
+          <td>Resolved course + intake</td>
+          <td>Zero ambiguity, zero AI cost, for anyone who already knows the codes.</td>
+        </tr>
+        <tr>
+          <td class="step-name backend">4b · Agent B reasons it out<span class="step-ref">conversational</span></td>
+          <td>Agent B works out which course and which specific intake date the customer means from the message and, if needed, earlier turns of the conversation — asking and waiting for a reply if the intake isn't yet clear, rather than guessing or booking the next available date.</td>
+          <td>Message, conversation history, live course/intake list</td>
+          <td>Resolved course + intake, or a clarifying question</td>
+          <td>The judgement call that replaces a staff member reading a message and figuring out what someone actually wants — including correctly handling a bare reply like "the second one."</td>
+        </tr>
+        <tr>
+          <td class="step-name backend">5 · Profile is auto-filled<span class="step-ref">registered profile</span></td>
+          <td>Name, NRIC and email are pulled from the customer's already-verified registration — never asked again.</td>
+          <td>Customer profile</td>
+          <td>Complete enrollment request</td>
+          <td>Because registration (Instance 02) already verified these once, the customer never re-types personal details to enrol.</td>
+        </tr>
+        <tr>
+          <td class="step-name decision">6 · Fields &amp; intake are validated<span class="step-ref">quality gate</span></td>
+          <td>System checks the course exists, the NRIC and email are correctly formatted, and the chosen intake genuinely belongs to that course — before touching anything.</td>
+          <td>Resolved enrollment request</td>
+          <td>Pass, or a specific correction request</td>
+          <td>Catches a typo or a mismatched intake immediately, in the same conversation — never silently creates a bad record.</td>
+        </tr>
+        <tr>
+          <td class="step-name decision">7 · Duplicate check<span class="step-ref">no double-booking</span></td>
+          <td>System checks whether this customer already has an active enrollment in this exact course and date.</td>
+          <td>Customer ID, course, date</td>
+          <td>Pass, or their existing enrollment details</td>
+          <td>Prevents accidental double-booking and double-billing — the customer is shown what they already have, not a confusing second invoice.</td>
+        </tr>
+        <tr>
+          <td class="step-name backend">8 · Enrollment created &amp; seat taken<span class="step-ref">fee + seat</span></td>
+          <td>The course fee (and any SkillsFuture subsidy) is calculated, the enrollment record is created, and the seat is reserved on that specific intake.</td>
+          <td>Course fee rules, chosen intake</td>
+          <td>New enrollment record; one fewer seat available</td>
+          <td>Fee calculation and seat inventory are handled instantly and consistently — no manual spreadsheet tally of who has which seat.</td>
+        </tr>
+        <tr>
+          <td class="step-name db">9 · Stored in the enrollment database<span class="step-ref">system of record</span></td>
+          <td>The enrollment is committed to the same database used for every course, schedule and enrolment.</td>
+          <td>New enrollment</td>
+          <td>Stored record (course, date, fee, status)</td>
+          <td>One source of truth — no separate spreadsheet that can drift out of sync.</td>
+        </tr>
+        <tr>
+          <td class="step-name backend">10 · Invoice is generated<span class="step-ref">PDF + PayNow QR</span></td>
+          <td>A formal PDF invoice is produced automatically, including a scannable PayNow QR code for payment.</td>
+          <td>Enrollment details, fee breakdown</td>
+          <td>Invoice PDF</td>
+          <td>A correctly-filled invoice in seconds — no staff member manually drafting one.</td>
+        </tr>
+        <tr>
+          <td class="step-name backend">11 · Invoice is emailed<span class="step-ref">SMTP delivery</span></td>
+          <td>The invoice is sent to the customer's registered email with payment and SkillsFuture claim instructions.</td>
+          <td>Invoice PDF, customer email</td>
+          <td>Sent email</td>
+          <td>Instant delivery, any hour, with no one at Q&amp;M attaching and sending it by hand.</td>
+        </tr>
+        <tr>
+          <td class="step-name db">12 · Status advanced &amp; payment tracked<span class="step-ref">handoff to Module C</span></td>
+          <td>The enrollment is marked "awaiting payment," and a payment record is opened so Module C's payment-verification step has something to update the moment proof arrives.</td>
+          <td>Enrollment ID</td>
+          <td>Updated status; a pending payment record</td>
+          <td>The payment side of the process is already primed — nothing extra needs setting up when the customer later sends a payment screenshot.</td>
+        </tr>
+        <tr>
+          <td class="step-name gateway">13 · Confirmation delivered<span class="step-ref">Gateway</span></td>
+          <td>The customer is told exactly what they're enrolled in, what it costs, and what to do next.</td>
+          <td>Enrollment + invoice details</td>
+          <td>Delivered WhatsApp confirmation</td>
+          <td class="automation">A clear, immediate confirmation — every fee, code and invoice number guaranteed to match the real record, never rounded or guessed.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="eyebrow" style="margin-top:44px;">For engineers — implementation trace</p>
+  <h2 style="margin-top:0;">Same journey, at file-and-function level</h2>
+  <p class="dek">The same path with exact code references. Covers the branch where validation and the duplicate check both pass — see the callout above for what "successful" bundles together.</p>
+
+  <h2><span class="step-scope">Stage 1 — Arrival &amp; routing</span>Same pipeline as every other message</h2>
+  <div class="steps">
+    <div class="step">
+      <span class="step-num gateway">01</span>
+      <div><p class="step-title">Gateway → Orchestrator → Router <span class="tag gateway">gateway</span></p>
+      <p class="step-text">Identical to <code>Instance 01</code> up to <code>router.route()</code>, which dispatches to <code>module_b.run(payload, route)</code> once intent = ENROLLMENT.</p></div>
+    </div>
+  </div>
+
+  <h2><span class="step-scope">Stage 2 — Resolving course, intake &amp; profile</span>Deterministic match, quick shortcut, or Agent B</h2>
+  <div class="steps">
+    <div class="step">
+      <span class="step-num decision">02</span>
+      <div><p class="step-title">route.is_command, or _quick_enroll_from_text(body) <span class="tag decision">decision</span></p>
+      <p class="step-text"><code>module_b.py</code> — an <code>/enroll</code> command, or free text where both a C-code and an SH-code regex-match (<code>_C_CODE_IN_TEXT</code> / <code>_SH_CODE_IN_TEXT</code>), short-circuit straight to <code>_smart_enroll()</code> — no LLM call.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-num backend">03</span>
+      <div><p class="step-title">_smart_enroll(params, customer) <span class="tag backend">backend</span></p>
+      <p class="step-text">Re-classifies every pipe-separated field by pattern regardless of position: <code>valid_nric()</code>, <code>valid_email()</code>, an SH-code regex, then a trailing bare integer as <code>schedule_no</code>. The first remaining text resolves to a course via <code>courses_svc.resolve_course_arg()</code>; a second becomes a name override. Blank name/NRIC/email fall back to <code>customer</code>.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-num ext">04</span>
+      <div><p class="step-title">_run_agent(body) <span class="tag ext">OpenAI</span></p>
+      <p class="step-text"><code>kickoff_agent(role="Q&amp;M Enrollment Pipeline Agent", tools=MODULE_B_TOOLS)</code>. Backstory hard-requires a specific, participant-named intake before ever calling <em>Enroll Participant</em>; instructed to resolve a bare confirmation ("intake 2") against its own previous numbered reply in chat history rather than re-querying <em>Course Schedule</em>.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-num backend">05</span>
+      <div><p class="step-title">Validate Enrollment / Enroll Participant tools <span class="tag backend">backend</span></p>
+      <p class="step-text"><code>tools/enrollment_tools.py</code> — both wrap the exact same <code>services/enrollment.py</code> functions the command path calls via <code>_smart_enroll()</code>. One pipeline, two entry points.</p></div>
+    </div>
+  </div>
+
+  <h2><span class="step-scope">Stage 3 — The enrollment pipeline</span>services/enrollment.py: enroll()</h2>
+  <div class="steps">
+    <div class="step">
+      <span class="step-num decision">06</span>
+      <div><p class="step-title">validate_enrollment() + schedule resolution <span class="tag decision">decision</span></p>
+      <p class="step-text">Checks course/name/NRIC/email are non-empty, the course resolves via <code>repo.get_course_by_name()</code>, and NRIC/email pass format checks. Immediately after (folded into the same diagram gate): an SH-code must belong to the resolved course, and a <code>schedule_no</code> must be in range — either failure returns a specific error with the available intakes listed.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-num db">07</span>
+      <div><p class="step-title">repo.active_enrollment_for_course(...) <span class="tag db">database</span></p>
+      <p class="step-text">The duplicate guard. A match short-circuits with the existing enrollment's status and a next-step hint (pay / resend invoice / resend receipt) instead of creating a second record.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-num backend">08</span>
+      <div><p class="step-title">compute_fee() + new_invoice_no() <span class="tag backend">backend</span></p>
+      <p class="step-text"><code>compute_fee(full_fee, sf_subsidy_cap)</code> → <code>(fee, subsidy, net)</code>; <code>new_invoice_no()</code> mints the invoice number.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-num db">09</span>
+      <div><p class="step-title">repo.create_enrollment(status="enrolled") <span class="tag db">database</span></p>
+      <p class="step-text">Followed by <code>repo.adjust_schedule_seats(schedule_id, +1)</code>, <code>repo.set_customer_status(whatsapp_id, "enrolled")</code>, and (legacy) <code>repo.set_lead_status()</code> if a lead row exists for this phone.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-num backend">10</span>
+      <div><p class="step-title">generate_invoice_pdf(enrollment) <span class="tag backend">backend</span></p>
+      <p class="step-text"><code>app/pdf.py</code> — ReportLab, embeds a PayNow QR encoding the company UEN and the invoice number as payment reference.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-num backend">11</span>
+      <div><p class="step-title">_send_invoice_email() → email_service.send_email() <span class="tag backend">backend</span></p>
+      <p class="step-text">SMTP delivery with the PDF attached; body includes SkillsFuture claim instructions. Logged to console instead of sent when <code>EMAIL_ENABLED=false</code>.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-num db">12</span>
+      <div><p class="step-title">repo.update_enrollment(status="invoice_sent") + repo.record_payment(verdict="pending") <span class="tag db">database</span></p>
+      <p class="step-text">Opens the payments-ledger row Module C will update in place, rather than insert a new one, once payment proof is verified.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-num backend">13</span>
+      <div><p class="step-title">Reply composed inline <span class="tag backend">backend</span></p>
+      <p class="step-text">Course, date, name, NRIC, a fee line adjusted for SkillsFuture wording (never upgraded to "fully claimable" unless net payable is genuinely S$0), the invoice number, and the <code>/pay</code> next step.</p></div>
+    </div>
+  </div>
+
+  <h2><span class="step-scope">Stage 4 — Outbound</span>Delivering the confirmation</h2>
+  <div class="steps">
+    <div class="step">
+      <span class="step-num gateway">14</span>
+      <div><p class="step-title">whatsapp_client.send_whatsapp(routing_id, reply) <span class="tag gateway">gateway</span></p>
+      <p class="step-text">Same delivery path as every other reply: <code>POST /send-reply</code> to <code>whatsapp-server</code>, back to the same WhatsApp chat.</p></div>
+    </div>
+  </div>
+
+  <p class="footnote">Q&amp;M Dental Group — WhatsApp Enquiry &amp; Enrollment System · source: app/crews/module_b.py, app/tools/enrollment_tools.py, app/services/enrollment.py, app/pdf.py, app/email_service.py, app/repositories.py</p>
+
+</div>
+</body>
+</html>
