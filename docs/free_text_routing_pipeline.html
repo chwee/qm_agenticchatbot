@@ -1,0 +1,526 @@
+<title>Free-Text Routing Pipeline</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+  :root{
+    --paper:#EEF0EF; --paper-raised:#FFFFFF;
+    --ink:#171D1A; --ink-soft:#4B5550; --ink-faint:#7B857F;
+    --line:#CBD2CD; --line-soft:#DEE3DF;
+    --accent:#8C6A1B; --accent-soft:#F1E4C8; --accent-ink:#4A3A10;
+    --mod-a:#256A62; --mod-a-soft:#DCEEEB;
+    --mod-b:#54437D; --mod-b-soft:#E7E2F2;
+    --mod-c:#8F4A2E; --mod-c-soft:#F3E1D7;
+    --shadow: 0 1px 2px rgba(23,29,26,.06), 0 6px 20px rgba(23,29,26,.05);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#141917; --paper-raised:#1B211E;
+      --ink:#E8ECE9; --ink-soft:#A9B3AE; --ink-faint:#7C8985;
+      --line:#333B37; --line-soft:#262D29;
+      --accent:#E0B15C; --accent-soft:#372C16; --accent-ink:#F3D9A2;
+      --mod-a:#5FC2B7; --mod-a-soft:#15302B;
+      --mod-b:#A597D6; --mod-b-soft:#292440;
+      --mod-c:#D98A63; --mod-c-soft:#3A241A;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#141917; --paper-raised:#1B211E;
+    --ink:#E8ECE9; --ink-soft:#A9B3AE; --ink-faint:#7C8985;
+    --line:#333B37; --line-soft:#262D29;
+    --accent:#E0B15C; --accent-soft:#372C16; --accent-ink:#F3D9A2;
+    --mod-a:#5FC2B7; --mod-a-soft:#15302B;
+    --mod-b:#A597D6; --mod-b-soft:#292440;
+    --mod-c:#D98A63; --mod-c-soft:#3A241A;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.35);
+  }
+
+  *{box-sizing:border-box}
+  body{
+    background:var(--paper); color:var(--ink);
+    font-family:'IBM Plex Sans', Arial, sans-serif;
+    font-size:16px; line-height:1.65;
+  }
+  .page{ max-width:1040px; margin:0 auto; padding:56px 24px 90px; }
+
+  /* ── Masthead ─────────────────────────────────────────── */
+  .masthead{ margin-bottom:56px; }
+  .eyebrow{
+    font-family:'IBM Plex Mono', monospace; font-size:12px; font-weight:500;
+    letter-spacing:.12em; text-transform:uppercase; color:var(--accent);
+    display:flex; align-items:center; gap:10px; margin-bottom:14px;
+  }
+  .eyebrow::before{ content:""; width:22px; height:2px; background:var(--accent); display:inline-block; }
+  h1{
+    font-family:'IBM Plex Sans Condensed', sans-serif; font-weight:700;
+    font-size:clamp(34px,5vw,52px); line-height:1.06; letter-spacing:-.01em;
+    text-wrap:balance; margin:0 0 16px;
+  }
+  .dek{
+    font-size:18px; color:var(--ink-soft); max-width:640px; margin:0;
+    text-wrap:balance;
+  }
+  .meta-row{
+    display:flex; flex-wrap:wrap; gap:10px; margin-top:26px;
+  }
+  .meta-chip{
+    font-family:'IBM Plex Mono', monospace; font-size:12px; color:var(--ink-soft);
+    border:1px solid var(--line); border-radius:100px; padding:5px 12px;
+    background:var(--paper-raised);
+  }
+
+  section{ margin-top:72px; }
+  .section-head{ max-width:720px; margin-bottom:28px; }
+  h2{
+    font-family:'IBM Plex Sans Condensed', sans-serif; font-weight:700;
+    font-size:28px; letter-spacing:-.005em; margin:0 0 10px; text-wrap:balance;
+  }
+  .section-head p{ color:var(--ink-soft); margin:0; font-size:15.5px; max-width:640px; }
+  .prose{ max-width:700px; }
+  .prose p{ color:var(--ink-soft); font-size:15.5px; }
+
+  /* ── Figure / diagram ─────────────────────────────────── */
+  figure{ margin:0; }
+  .diagram-frame{
+    background:var(--paper-raised); border:1px solid var(--line);
+    border-radius:10px; padding:22px 18px 14px; box-shadow:var(--shadow);
+    overflow-x:auto;
+  }
+  .diagram-frame svg{ display:block; width:100%; height:auto; }
+  figcaption{
+    font-size:13px; color:var(--ink-faint); margin-top:12px; max-width:700px;
+  }
+
+  svg text{ font-family:'IBM Plex Sans', Arial, sans-serif; fill:var(--ink); }
+  svg .mono{ font-family:'IBM Plex Mono', monospace; }
+  svg .node-title{ font-weight:600; font-size:13.5px; }
+  svg .node-sub{ font-size:11.5px; fill:var(--ink-soft); }
+  svg .lane-idx{ font-family:'IBM Plex Mono', monospace; font-size:11px; font-weight:600; letter-spacing:.04em; }
+  svg .arrow-label{ font-size:10.5px; fill:var(--ink-faint); font-family:'IBM Plex Mono', monospace; }
+  svg line, svg polyline{ stroke:var(--ink-faint); stroke-width:1.4; fill:none; }
+  svg path.connector{ stroke:var(--ink-faint); stroke-width:1.4; fill:none; }
+  svg .dashed{ stroke-dasharray:4 4; }
+  svg .box{ fill:var(--paper-raised); stroke:var(--line); stroke-width:1.3; }
+  svg .box-tint{ fill:var(--accent-soft); stroke:var(--line); stroke-width:1.3; }
+  svg .box-a{ fill:var(--mod-a-soft); stroke:var(--mod-a); stroke-width:1.5; }
+  svg .box-b{ fill:var(--mod-b-soft); stroke:var(--mod-b); stroke-width:1.5; }
+  svg .box-c{ fill:var(--mod-c-soft); stroke:var(--mod-c); stroke-width:1.5; }
+  svg .ink-a{ fill:var(--mod-a); } svg .ink-b{ fill:var(--mod-b); } svg .ink-c{ fill:var(--mod-c); }
+  svg .stroke-a{ stroke:var(--mod-a); } svg .stroke-b{ stroke:var(--mod-b); } svg .stroke-c{ stroke:var(--mod-c); }
+  svg .bus{ stroke:var(--accent); stroke-width:1.6; }
+  svg .bus-dot{ fill:var(--accent); }
+
+  /* ── Numbered pipeline steps ─────────────────────────── */
+  .steps{ max-width:760px; }
+  .step{
+    display:grid; grid-template-columns:64px 1fr; gap:20px;
+    padding:22px 0; border-top:1px solid var(--line-soft);
+  }
+  .step:first-child{ border-top:1px solid var(--line); }
+  .step-idx{
+    font-family:'IBM Plex Mono', monospace; font-size:13px; font-weight:600;
+    color:var(--accent); padding-top:2px;
+  }
+  .step h3{
+    font-family:'IBM Plex Sans', sans-serif; font-size:17px; font-weight:600;
+    margin:0 0 6px;
+  }
+  .step p{ color:var(--ink-soft); font-size:15px; margin:0 0 10px; }
+  .cite{
+    font-family:'IBM Plex Mono', monospace; font-size:12px; color:var(--ink-faint);
+    background:var(--paper); border:1px solid var(--line-soft); border-radius:5px;
+    padding:2px 8px; display:inline-block;
+  }
+  .step .badge{
+    display:inline-flex; align-items:center; gap:6px; font-family:'IBM Plex Mono', monospace;
+    font-size:11px; font-weight:600; letter-spacing:.03em; border-radius:100px;
+    padding:3px 10px; margin-bottom:8px;
+  }
+  .badge.a{ background:var(--mod-a-soft); color:var(--mod-a); }
+  .badge.b{ background:var(--mod-b-soft); color:var(--mod-b); }
+  .badge.c{ background:var(--mod-c-soft); color:var(--mod-c); }
+  .badge.n{ background:var(--accent-soft); color:var(--accent-ink); }
+
+  /* ── Tools reference table ───────────────────────────── */
+  .tool-grid{
+    display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
+    gap:16px;
+  }
+  .tool-card{
+    background:var(--paper-raised); border:1px solid var(--line); border-radius:10px;
+    padding:18px 20px; box-shadow:var(--shadow);
+  }
+  .tool-card h3{
+    font-size:15px; margin:0 0 3px; display:flex; align-items:center; gap:8px;
+  }
+  .dot{ width:9px; height:9px; border-radius:50%; display:inline-block; }
+  .dot.a{ background:var(--mod-a); } .dot.b{ background:var(--mod-b); } .dot.c{ background:var(--mod-c); }
+  .tool-card .role{ font-size:12.5px; color:var(--ink-faint); margin:0 0 14px; }
+  .tool-card ul{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px; }
+  .tool-card li{
+    font-family:'IBM Plex Mono', monospace; font-size:12.5px; color:var(--ink-soft);
+    padding-left:14px; position:relative;
+  }
+  .tool-card li::before{
+    content:"→"; position:absolute; left:0; color:var(--ink-faint);
+  }
+
+  footer{
+    margin-top:80px; padding-top:22px; border-top:1px solid var(--line);
+    font-size:12.5px; color:var(--ink-faint); font-family:'IBM Plex Mono', monospace;
+  }
+
+  @media (max-width:640px){
+    .step{ grid-template-columns:1fr; gap:6px; }
+    .diagram-frame{ padding:16px 12px; }
+  }
+</style>
+
+<div class="page">
+
+  <div class="masthead">
+    <div class="eyebrow">Q&amp;M AI Enquiry &amp; Enrollment System</div>
+    <h1>How a free-text message finds its agent</h1>
+    <p class="dek">
+      One WhatsApp thread, three specialist agents, and a router that tries
+      hard not to ask the LLM anything it can already infer for free.
+    </p>
+    <div class="meta-row">
+      <span class="meta-chip">backend/app/orchestrator.py</span>
+      <span class="meta-chip">backend/app/crews/router.py</span>
+      <span class="meta-chip">CrewAI · GPT-4o-mini</span>
+    </div>
+  </div>
+
+  <section>
+    <div class="section-head">
+      <h2>Architecture overview</h2>
+      <p>
+        A message crosses five stages before a reply goes out: ingress,
+        registration, a three-tier routing decision, a specialist agent's own
+        reasoning loop, and a write-back that lets the next message skip the
+        expensive parts entirely.
+      </p>
+    </div>
+
+    <figure>
+      <div class="diagram-frame">
+        <svg viewBox="0 0 1000 900" role="img"
+             aria-label="Flowchart: a WhatsApp message travels through the gateway to the orchestrator, then through three routing checks — media short-circuit, Tier 0 sticky dispatch, and Tier 1 LLM classification — before landing on Module A, B, or C, whose tools write through services to Postgres, after which state is written back and the reply is delivered to the same participant.">
+          <defs>
+            <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="currentColor" />
+            </marker>
+            <marker id="arrowBus" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="var(--accent)" />
+            </marker>
+          </defs>
+
+          <!-- Row A: ingress -->
+          <rect class="box" x="180" y="24" width="220" height="60" rx="8"/>
+          <text class="node-title" x="290" y="49" text-anchor="middle">WhatsApp</text>
+          <text class="node-sub" x="290" y="66" text-anchor="middle">Participant</text>
+
+          <line x1="400" y1="54" x2="452" y2="54" marker-end="url(#arrow)"/>
+          <text class="arrow-label" x="426" y="44" text-anchor="middle">message</text>
+
+          <rect class="box" x="456" y="24" width="364" height="60" rx="8"/>
+          <text class="node-title" x="638" y="49" text-anchor="middle">Gateway · Node.js (whatsapp-web.js)</text>
+          <text class="node-sub mono" x="638" y="66" text-anchor="middle">POST /webhook/whatsapp</text>
+
+          <line x1="638" y1="84" x2="500" y2="138" marker-end="url(#arrow)"/>
+
+          <!-- Row B: orchestrator -->
+          <rect class="box" x="290" y="140" width="420" height="62" rx="8"/>
+          <text class="node-title" x="500" y="166" text-anchor="middle">Orchestrator — handle_inbound()</text>
+          <text class="node-sub" x="500" y="184" text-anchor="middle">resolve/create customer · registration gate (Module B only)</text>
+
+          <line x1="330" y1="202" x2="180" y2="248" marker-end="url(#arrow)"/>
+          <line x1="500" y1="202" x2="500" y2="248" marker-end="url(#arrow)"/>
+          <line x1="670" y1="202" x2="820" y2="248" marker-end="url(#arrow)"/>
+
+          <!-- Row C: three routing lanes -->
+          <rect class="box-tint" x="20" y="250" width="320" height="112" rx="8"/>
+          <text class="lane-idx" x="40" y="276" fill="var(--accent)">① MEDIA ATTACHED</text>
+          <text class="node-sub" x="40" y="298">Image on the message → forced to</text>
+          <text class="node-sub" x="40" y="314">Module C, no classification run.</text>
+          <text class="node-sub" x="40" y="336" font-weight="600">0 LLM calls — deterministic</text>
+
+          <rect class="box-tint" x="340" y="250" width="320" height="112" rx="8"/>
+          <text class="lane-idx" x="360" y="276" fill="var(--accent)">② TIER 0 · STICKY DISPATCH</text>
+          <text class="node-sub" x="360" y="298">conversation_state lookup — a</text>
+          <text class="node-sub" x="360" y="314">module left a question pending?</text>
+          <text class="node-sub" x="360" y="336" font-weight="600">0 LLM calls if owner still applies</text>
+
+          <rect class="box-tint" x="660" y="250" width="320" height="112" rx="8"/>
+          <text class="lane-idx" x="680" y="276" fill="var(--accent)">③ TIER 1 · CLASSIFIER</text>
+          <text class="node-sub" x="680" y="298">LLM labels ENQUIRY / ENROLLMENT /</text>
+          <text class="node-sub" x="680" y="314">PAYMENT (keyword fallback, no key)</text>
+          <text class="node-sub" x="680" y="336" font-weight="600">1 LLM call, only on a Tier 0 miss</text>
+
+          <!-- lanes -> bus -->
+          <line x1="180" y1="362" x2="230" y2="416" class="bus" marker-end="url(#arrowBus)"/>
+          <line x1="500" y1="362" x2="500" y2="416" class="bus" marker-end="url(#arrowBus)"/>
+          <line x1="820" y1="362" x2="770" y2="416" class="bus" marker-end="url(#arrowBus)"/>
+
+          <!-- low-confidence side path — forks right off lane 3, clear of the bus and the module row -->
+          <line class="dashed" x1="820" y1="362" x2="912" y2="402" stroke="var(--ink-faint)" marker-end="url(#arrow)"/>
+          <rect class="box" x="840" y="404" width="145" height="38" rx="6" stroke-dasharray="3 3"/>
+          <text class="node-sub" x="912" y="419" text-anchor="middle">low confidence →</text>
+          <text class="node-sub" x="912" y="434" text-anchor="middle">disambiguation menu</text>
+
+          <!-- bus bar -->
+          <line class="bus" x1="170" y1="416" x2="830" y2="416"/>
+          <circle class="bus-dot" cx="230" cy="416" r="3"/>
+          <circle class="bus-dot" cx="500" cy="416" r="3"/>
+          <circle class="bus-dot" cx="770" cy="416" r="3"/>
+
+          <!-- bus -> modules -->
+          <line x1="170" y1="416" x2="170" y2="444" class="bus" marker-end="url(#arrowBus)"/>
+          <line x1="500" y1="416" x2="500" y2="444" class="bus" marker-end="url(#arrowBus)"/>
+          <line x1="830" y1="416" x2="830" y2="444" class="bus" marker-end="url(#arrowBus)"/>
+
+          <!-- Row D: modules -->
+          <rect class="box-a" x="40" y="444" width="260" height="86" rx="8"/>
+          <text class="node-title ink-a" x="170" y="472" text-anchor="middle">Module A</text>
+          <text class="node-sub" x="170" y="490" text-anchor="middle">Enquiry Agent</text>
+          <text class="node-sub mono" x="170" y="510" text-anchor="middle">CrewAI agent + 6 tools</text>
+
+          <rect class="box-b" x="370" y="444" width="260" height="86" rx="8"/>
+          <text class="node-title ink-b" x="500" y="472" text-anchor="middle">Module B</text>
+          <text class="node-sub" x="500" y="490" text-anchor="middle">Enrollment Agent</text>
+          <text class="node-sub mono" x="500" y="510" text-anchor="middle">CrewAI agent + 7 tools</text>
+
+          <rect class="box-c" x="700" y="444" width="260" height="86" rx="8"/>
+          <text class="node-title ink-c" x="830" y="472" text-anchor="middle">Module C</text>
+          <text class="node-sub" x="830" y="490" text-anchor="middle">Payment Agent</text>
+          <text class="node-sub mono" x="830" y="510" text-anchor="middle">CrewAI agent + 5 tools</text>
+
+          <line x1="170" y1="530" x2="380" y2="566" marker-end="url(#arrow)"/>
+          <line x1="500" y1="530" x2="500" y2="566" marker-end="url(#arrow)"/>
+          <line x1="830" y1="530" x2="620" y2="566" marker-end="url(#arrow)"/>
+
+          <!-- Row E: services / DB -->
+          <rect class="box" x="200" y="570" width="600" height="58" rx="8"/>
+          <text class="node-title" x="500" y="594" text-anchor="middle">services/*.py → repositories.py → PostgreSQL</text>
+          <text class="node-sub" x="500" y="612" text-anchor="middle">single source of truth for every module's tool calls</text>
+
+          <line x1="500" y1="628" x2="500" y2="662" marker-end="url(#arrow)"/>
+
+          <!-- Row F: state write-back -->
+          <rect class="box-tint" x="240" y="664" width="520" height="58" rx="8"/>
+          <text class="node-title" x="500" y="688" text-anchor="middle">Write-back: conversation_state + chat_memory</text>
+          <text class="node-sub" x="500" y="706" text-anchor="middle">records who owns the next reply, so Tier 0 can catch it for free</text>
+
+          <line x1="500" y1="722" x2="500" y2="756" marker-end="url(#arrow)"/>
+
+          <!-- Row G: reply out -->
+          <rect class="box" x="290" y="758" width="420" height="58" rx="8"/>
+          <text class="node-title" x="500" y="782" text-anchor="middle">Gateway · POST /send-reply</text>
+          <text class="node-sub" x="500" y="800" text-anchor="middle">delivered back to the same WhatsApp participant</text>
+
+          <!-- loop back -->
+          <path class="dashed connector" d="M 288 787 L 10 787 L 10 54 L 178 54" marker-end="url(#arrow)" fill="none"/>
+          <text class="arrow-label" x="14" y="420" transform="rotate(-90 14 420)" text-anchor="middle">reply</text>
+        </svg>
+      </div>
+      <figcaption>
+        Every message hits the three routing lanes in order — media, then
+        sticky dispatch, then the LLM classifier — and only the third one
+        costs an API call. All three resolve to one of Module A/B/C (or, on
+        low confidence, a disambiguation menu that Tier&nbsp;0 resolves on the
+        participant's very next reply).
+      </figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <h2>Query processing pipeline, step by step</h2>
+      <p>
+        The same eight steps run for every free-text message, from
+        <span class="cite">"hi"</span> to a mid-enrollment
+        <span class="cite">"yes go ahead"</span>. What changes between them is
+        which lane resolves the routing, and which module + tools pick it up.
+      </p>
+    </div>
+
+    <div class="steps">
+
+      <div class="step">
+        <div class="step-idx">01</div>
+        <div>
+          <h3>Message arrives at the gateway</h3>
+          <p>
+            The Node gateway (<span class="cite">whatsapp-web.js</span>) receives the
+            WhatsApp message and forwards it as JSON to the Python backend —
+            no processing happens on the gateway side.
+          </p>
+          <span class="cite">main.py:77 — POST /webhook/whatsapp</span>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-idx">02</div>
+        <div>
+          <h3>Orchestrator resolves the customer</h3>
+          <p>
+            <span class="cite">handle_inbound()</span> upserts the sender into
+            <span class="cite">customers</span> by their stable WhatsApp id, then
+            checks the registration gate — but only if routing is about to
+            land on Module B. Module A and C never block on it.
+          </p>
+          <span class="cite">orchestrator.py:815-871, 1013-1041</span>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-idx">03</div>
+        <div>
+          <span class="badge c">Lane ① · media</span>
+          <h3>Image attached? Skip straight to Module C</h3>
+          <p>
+            A payment screenshot never touches the classifier. The router
+            checks for media before anything else and forces Module C —
+            vision verification and payment recording are deliberately kept
+            outside LLM judgement.
+          </p>
+          <span class="cite">router.py:683-689</span>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-idx">04</div>
+        <div>
+          <span class="badge n">Lane ② · Tier 0</span>
+          <h3>Is a question already pending?</h3>
+          <p>
+            <span class="cite">conversation_state</span> is checked for an
+            owning module left over from the last turn. If nothing in the new
+            message clearly names a different module, it's dispatched straight
+            back — this is how <span class="cite">"14 Aug"</span> or
+            <span class="cite">"yes"</span> resolve correctly without ever
+            reaching an LLM.
+          </p>
+          <span class="cite">router.py:585-652</span>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-idx">05</div>
+        <div>
+          <span class="badge n">Lane ③ · Tier 1</span>
+          <h3>Classify the free text</h3>
+          <p>
+            Only on a Tier 0 miss: an LLM call labels the message ENQUIRY,
+            ENROLLMENT, or PAYMENT (a keyword heuristic substitutes if
+            <span class="cite">OPENAI_API_KEY</span> is unset). Low confidence
+            returns a disambiguation menu instead of guessing.
+          </p>
+          <span class="cite">router.py:367-582</span>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-idx">06</div>
+        <div>
+          <h3>The specialist agent reasons and acts</h3>
+          <p>
+            The chosen module builds a CrewAI agent with its own persona and
+            tool set, hands it the last few turns of chat history plus the new
+            message, and lets it call tools — each one a thin wrapper over
+            <span class="cite">services/</span> business logic, the same
+            functions any deterministic path would call.
+          </p>
+          <span class="cite">module_a.py:821-1096 · crews/_base.py:107-184</span>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-idx">07</div>
+        <div>
+          <h3>State is written back before the reply goes out</h3>
+          <p>
+            The module returns a result that says whether a question is still
+            open. If so, <span class="cite">conversation_state</span> is
+            updated with the owning module and the resolved slots (course,
+            intake, candidates); if not, it's cleared. This is what Tier 0
+            reads on the next turn.
+          </p>
+          <span class="cite">orchestrator.py:760-793</span>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-idx">08</div>
+        <div>
+          <h3>Reply delivered</h3>
+          <p>
+            The text is posted back to the gateway's
+            <span class="cite">/send-reply</span>, which resolves the original
+            chat id and sends it — closing the loop on the same WhatsApp
+            thread the message arrived on.
+          </p>
+          <span class="cite">whatsapp_client.py:17-35</span>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <h2>Specialist agents &amp; their tools</h2>
+      <p>
+        Tools are thin — each one delegates to <span class="cite">services/</span>
+        and is shared across modules where it saves an agent a round trip
+        (Module B borrows Module A's course lookups; Module C borrows Module
+        B's enrollment lookups).
+      </p>
+    </div>
+
+    <div class="tool-grid">
+      <div class="tool-card">
+        <h3><span class="dot a"></span>Module A — Enquiry</h3>
+        <p class="role">Course info, fees, schedules, reminders, lead capture</p>
+        <ul>
+          <li>List Courses</li>
+          <li>Course Fees</li>
+          <li>Course Schedule</li>
+          <li>SkillsFuture Info</li>
+          <li>Save Lead Data</li>
+          <li>Flag For Staff</li>
+        </ul>
+      </div>
+      <div class="tool-card">
+        <h3><span class="dot b"></span>Module B — Enrollment</h3>
+        <p class="role">Registration, enrolment, invoices, cancellation</p>
+        <ul>
+          <li>Validate Enrollment</li>
+          <li>Enroll Participant</li>
+          <li>My Enrollments</li>
+          <li>Resend Invoice</li>
+          <li>Request Cancellation</li>
+          <li>List Courses <span style="opacity:.55">(shared)</span></li>
+          <li>Course Schedule <span style="opacity:.55">(shared)</span></li>
+        </ul>
+      </div>
+      <div class="tool-card">
+        <h3><span class="dot c"></span>Module C — Payment</h3>
+        <p class="role">Settlement, receipts, balances — vision path is separate</p>
+        <ul>
+          <li>Settle Payment</li>
+          <li>Resend Receipt</li>
+          <li>Payment Balance</li>
+          <li>Resend Invoice <span style="opacity:.55">(shared)</span></li>
+          <li>My Enrollments <span style="opacity:.55">(shared)</span></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    Q&amp;M AI Enquiry &amp; Enrollment System — free-text agentic pipeline
+  </footer>
+
+</div>

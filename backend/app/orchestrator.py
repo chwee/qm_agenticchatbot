@@ -57,6 +57,7 @@ from . import query_log
 from . import repositories as repo
 from .config import settings
 from .crews import module_a, module_b, module_c, router
+from .dialogue import ACTIVE_FLOW_FOR_PENDING, PendingQuestion, TurnResult
 from .utils import is_registered
 from .whatsapp_client import send_whatsapp
 
@@ -151,7 +152,7 @@ _NAME_FILLER_RE = re.compile(
 _NAME_INTRO_RE = re.compile(
     r"(?:my\s+name\s+is|full\s+name\s+is|name\s+is|"
     r"you\s+can\s+call\s+me|call\s+me)\s*[:\-]?\s*"
-    r"([A-Za-z][A-Za-z .'\-]*)",
+    r"([A-Za-z][A-Za-z0-9 .'\-]*)",
     re.IGNORECASE,
 )
 
@@ -189,12 +190,26 @@ def _print_header(whatsapp_id: str, body: str, media: object) -> None:
         query_log.emit("│ Media   : [attached]")
 
 
-def _print_routing(label: str) -> None:
+def _print_routing(label: str, trace: object = None) -> None:
     """Trace the routing/agent-assignment line — which module (and agent, if
     any) is about to handle this turn. Any tool calls the agent makes trace
-    live, right after this line, via crews/_base.py's tool wrapper."""
+    live, right after this line, via crews/_base.py's tool wrapper.
+
+    `trace` is the router's RouteTrace when this turn actually went through
+    the router (DIALOGUE_STATE_REDESIGN.md phase 0) — it records WHICH tier
+    decided and which overrides fired, which the outcome line alone could
+    never show. Omitted on the registration-gate paths, which never route.
+    Typed loosely and rendered defensively: a trace detail must never be able
+    to break a turn."""
     query_log.emit("├─ ROUTING " + "─" * (_BOX_W - 11))
     query_log.emit(f"│ {label}")
+    if trace is None:
+        return
+    try:
+        for line in trace.render():
+            query_log.emit(f"│   {line}")
+    except Exception as exc:  # noqa: BLE001
+        log.debug("route trace render failed: %s", exc)
 
 
 def _print_reply(reply: str) -> None:
@@ -297,12 +312,17 @@ def _looks_like_decline(text: str) -> bool:
 
 
 def _looks_like_name(cleaned: str) -> bool:
-    """Structural plausibility check — letters/spaces/apostrophes/hyphens
-    only, 1-5 words, sane length. Shared by both the regex and LLM
-    extraction paths so an LLM guess is held to the same bar."""
+    """Structural plausibility check — must start with a letter, then
+    letters/digits/spaces/apostrophes/hyphens, 1-5 words, sane length.
+    Shared by both the regex and LLM extraction paths so an LLM guess is
+    held to the same bar. Digits are allowed within a word (not just at the
+    boundary) — observed live: a test persona named "test user4" (a digit
+    suffix distinguishing multiple test accounts) had its name silently
+    rejected every turn, permanently stuck re-asking for a name already
+    given, because this used to require letters only."""
     if not cleaned or len(cleaned) > 60:
         return False
-    if not re.match(r"^[A-Za-z][A-Za-z .'\-]*$", cleaned):
+    if not re.match(r"^[A-Za-z][A-Za-z0-9 .'\-]*$", cleaned):
         return False
     words = cleaned.split()
     return 1 <= len(words) <= 5
@@ -315,8 +335,14 @@ def _extracted_from_source(candidate: str, source: str) -> bool:
     never hallucinate a name that isn't there — the LLM fallback path has
     no such guarantee, and needs this check to close that gap (this is what
     catches an LLM inventing a plausible-looking name, e.g. "Not Moment",
-    out of a message that names no one)."""
-    source_words = {w.lower() for w in re.findall(r"[A-Za-z']+", source)}
+    out of a message that names no one).
+
+    Tokenizes with digits included (not letters-only) — observed live: a
+    genuinely correct LLM-extracted candidate like "test user4" tokenized
+    the SOURCE as "user" (digit silently dropped), so "user4" could never
+    be found in it and was discarded as an apparent hallucination even
+    though it was right there in the message."""
+    source_words = {w.lower() for w in re.findall(r"[A-Za-z0-9']+", source)}
     return all(w.lower() in source_words for w in candidate.split())
 
 
@@ -360,6 +386,17 @@ def _llm_extract_name(body: str) -> str | None:
 
     Scoped to name only — email/NRIC/phone always come from regex above so
     nothing sensitive is ever hallucinated.
+
+    Explicitly told not to judge plausibility (see task_description) —
+    observed live: "S1785444A, test user4" (a test persona deliberately
+    numbered to distinguish multiple test WhatsApp accounts) made the model
+    return bare "NONE" every single turn, apparently declining to treat
+    "test user4" as a real enough name to extract at all — completion_tokens
+    was literally 1, i.e. just "NONE", not a judgment call this function's
+    own post-checks (_looks_like_name/_extracted_from_source) ever got a
+    chance to review. The registration flow's job is to record whatever
+    name a participant gives, the same way NRIC/email/phone are taken as
+    stated — not to authenticate that it looks like a genuine human name.
     """
     try:
         from .crews._base import kickoff_agent
@@ -376,8 +413,11 @@ def _llm_extract_name(body: str) -> str | None:
             task_description=(
                 f'Message: "{body}"\n\n'
                 "If the message states the participant's full name, reply with ONLY that name "
-                "(no labels, no punctuation, no extra words). If no name is present, reply with "
-                "exactly: NONE"
+                "(no labels, no punctuation, no extra words). Extract whatever is offered as "
+                "their name exactly as given, including any digits in it (e.g. 'test user4' is a "
+                "valid name to extract as-is) — you are recording what they call themselves, not "
+                "judging whether it reads as a plausible real-world human name. If no name is "
+                "present at all, reply with exactly: NONE"
             ),
             expected_output="A person's full name, or the word NONE",
             max_iter=2,
@@ -674,18 +714,31 @@ def _dispatch(payload: dict, decision: dict, module: str, whatsapp_id: str, phon
     with no deterministic signal to resolve it. No agent runs this turn; the
     menu is returned directly, and the pending flow is recorded the same way
     Module A/B record their own (Requirement 3 AC10), so router.py's Tier 0
-    `_sticky_dispatch()` can match the participant's next reply against it."""
+    `_sticky_dispatch()` can match the participant's next reply against it.
+
+    DIALOGUE_STATE_REDESIGN.md phase 4: this is now the ONE place
+    conversation_state is actually written from a module's turn — each
+    module's run() returns a TurnResult (reply + the pending question/slots
+    it decided) instead of calling repo.set_conversation_state() /
+    clear_conversation_state_if_owner() itself from deep inside its own
+    control flow, at up to 7 different points depending on which branch a
+    turn took. The DECISION logic is unchanged (same marker/regex matching,
+    same branches, same outcomes) — only who performs the write, and from
+    one auditable site instead of scattered ones."""
+    trace = decision.get("trace")
     if module == "DISAMBIGUATE":
         log.info("Routed: wid=%s phone=%s module=DISAMBIGUATE", whatsapp_id, phone)
-        _print_routing("free text → disambiguation menu (low-confidence classification)")
+        _print_routing("free text → disambiguation menu (low-confidence classification)", trace)
         repo.set_conversation_state(whatsapp_id, "ROUTER", "awaiting_disambiguation")
         return router.DISAMBIGUATION_MENU, "ROUTER", "WhatsApp Intent Router"
 
     log.info("Routed: wid=%s phone=%s module=%s", whatsapp_id, phone, module)
     agent_name = _AGENT_NAMES.get(module, "?")
-    _print_routing(f"free text → Module {module} (agent: {agent_name})")
+    _print_routing(f"free text → Module {module} (agent: {agent_name})", trace)
     try:
-        return _MODULES.get(module, module_a).run(payload, decision), module, agent_name
+        result = _MODULES.get(module, module_a).run(payload, decision)
+        _apply_turn_result(whatsapp_id, result)
+        return result.reply, module, agent_name
     except module_c.RerouteRequested as e:
         # Requirement 3 AC14 — Module C determined this isn't a payment
         # question and handed it back. Redirect once (a plain second call,
@@ -699,7 +752,33 @@ def _dispatch(payload: dict, decision: dict, module: str, whatsapp_id: str, phon
         )
         candidate_agent = _AGENT_NAMES.get(e.candidate, "?")
         _print_routing(f"Module C rerouted → Module {e.candidate} (agent: {candidate_agent})")
-        return _MODULES.get(e.candidate, module_a).run(payload, decision), e.candidate, candidate_agent
+        result = _MODULES.get(e.candidate, module_a).run(payload, decision)
+        _apply_turn_result(whatsapp_id, result)
+        return result.reply, e.candidate, candidate_agent
+
+
+def _apply_turn_result(whatsapp_id: str, result: TurnResult) -> None:
+    """Write conversation_state from a module's TurnResult — the single
+    site DIALOGUE_STATE_REDESIGN.md phase 4 relocates every module's own
+    scattered repo.set_conversation_state()/clear_conversation_state_if_owner()
+    calls to. `result.pending == NONE` (the default) means clear; anything
+    else means set, using ACTIVE_FLOW_FOR_PENDING to still write the legacy
+    active_flow string Tier 0 sticky dispatch and each module's own
+    regex-based context-window detection currently read — migrating those
+    onto PendingQuestion directly is a later phase, not this one.
+
+    Module C's results always carry pending=NONE today (it has no state
+    ownership — see module_c.py: run()'s own comment) which correctly
+    resolves to a clear_conversation_state_if_owner(wid, "C") call; since
+    nothing is ever recorded as owned by "C", that call is always a no-op,
+    so no special-casing is needed here for that."""
+    if result.pending == PendingQuestion.NONE:
+        repo.clear_conversation_state_if_owner(whatsapp_id, result.module)
+    else:
+        repo.set_conversation_state(
+            whatsapp_id, result.module, ACTIVE_FLOW_FOR_PENDING[result.pending],
+            flow_context=result.slots.to_json(),
+        )
 
 
 def _persist_memory(whatsapp_id: str, user_text: str, reply: str) -> None:
@@ -904,6 +983,12 @@ def handle_inbound(payload: dict) -> dict:
     _set_ctx(customer)
     decision = router.route(payload)
     module   = decision["module"]
+    # Phase 0: the registration-gate branches below are terminal — they reply
+    # and return without reaching _dispatch(), so they have to emit the routing
+    # trace themselves or it's lost. These are precisely the turns worth
+    # measuring: "profile incomplete, prompting" is what an enquiry-shaped
+    # message misrouted to Module B actually looks like from the outside.
+    route_trace = decision.get("trace")
 
     # First time enrollment intent is seen against an incomplete profile —
     # trigger the registration prompt. Module A (ENQUIRY) and Module C
@@ -917,7 +1002,10 @@ def handle_inbound(payload: dict) -> dict:
             "No worries — no rush! Feel free to keep asking about our courses "
             "and fees, and just let me know whenever you're ready to enrol."
         )
-        _print_routing("free text → Module B (ENROLLMENT) — registration declined, not re-prompting")
+        _print_routing(
+            "free text → Module B (ENROLLMENT) — registration declined, not re-prompting",
+            route_trace,
+        )
         _print_reply(reply)
         _persist_memory(whatsapp_id, body, reply)
         return _result(reply, "B", _REGISTRATION_AGENT)
@@ -931,7 +1019,7 @@ def handle_inbound(payload: dict) -> dict:
                 "Could you double-check it and share the correct one, along with "
                 "the rest of your details?"
             )
-            _print_routing("free text → Module B (ENROLLMENT) — phone collision")
+            _print_routing("free text → Module B (ENROLLMENT) — phone collision", route_trace)
             _print_reply(reply)
             _persist_memory(whatsapp_id, body, reply)
             return _result(reply, "B", _REGISTRATION_AGENT)
@@ -940,7 +1028,10 @@ def handle_inbound(payload: dict) -> dict:
             customer = result["customer"]
             reply = _registration_prompt(result["missing"], has_progress=_has_any_field(customer), body=body)
             log.info("Enrollment intent from unregistered wid=%s — missing %s", whatsapp_id, result["missing"])
-            _print_routing("free text → Module B (ENROLLMENT) — profile incomplete, prompting")
+            _print_routing(
+                "free text → Module B (ENROLLMENT) — profile incomplete, prompting",
+                route_trace,
+            )
             _print_reply(reply)
             _persist_memory(whatsapp_id, body, reply)
             return _result(reply, "B", _REGISTRATION_AGENT)

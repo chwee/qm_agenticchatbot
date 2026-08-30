@@ -24,7 +24,7 @@ def get_pool() -> ConnectionPool:
     global _pool
     if _pool is None:
         _pool = ConnectionPool(
-            conninfo=settings.database_url,
+            conninfo=settings.resolved_database_url,
             min_size=1,
             max_size=10,
             kwargs={"row_factory": dict_row, "autocommit": True},
@@ -148,6 +148,15 @@ _SCHEMA_MIGRATIONS = [
     # the synchronous staff-approval action; dispatch_pending_credit_notes()
     # queries status='approved' AND notified_at IS NULL.
     "ALTER TABLE credit_notes ADD COLUMN IF NOT EXISTS notified_at TIMESTAMPTZ",
+    # DIALOGUE_STATE_REDESIGN.md phase 1 — dual-write only; see schema.sql's
+    # matching ALTER statement (for a fresh install) and
+    # app/dialogue/state.py (Slots.to_json()) for what this column holds.
+    "ALTER TABLE conversation_state ADD COLUMN IF NOT EXISTS flow_context"
+    " JSONB NOT NULL DEFAULT '{}'::jsonb",
+    # DIALOGUE_STATE_REDESIGN.md phase 2 (episode segmentation) — see
+    # schema.sql's matching ALTER statement and
+    # repositories.current_session_id() for what populates this.
+    "ALTER TABLE chat_memory ADD COLUMN IF NOT EXISTS session_id TEXT",
 ]
 
 # Unique indexes — created once, never dropped on restart.
@@ -160,6 +169,10 @@ _INDEX_MIGRATIONS = [
     " ON payments(receipt_no) WHERE receipt_no IS NOT NULL",
     "CREATE UNIQUE INDEX IF NOT EXISTS uq_reminders_wid_course_date"
     " ON reminders(whatsapp_id, course_name, course_date)",
+    # DIALOGUE_STATE_REDESIGN.md phase 2 — supports current_session_id()'s
+    # "most recent row for this whatsapp_id within the idle window" lookup.
+    "CREATE INDEX IF NOT EXISTS idx_chat_memory_session"
+    " ON chat_memory(whatsapp_id, session_id, created_at)",
 ]
 
 # Expected code → DB code mapping used by the data-fix check.

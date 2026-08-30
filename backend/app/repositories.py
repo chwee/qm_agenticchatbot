@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import logging
+import uuid
 from typing import Any, Optional
 
 from . import database as db
@@ -425,20 +426,31 @@ def get_conversation_state(whatsapp_id: str) -> Optional[dict]:
     )
 
 
-def set_conversation_state(whatsapp_id: str, active_module: str, active_flow: str) -> None:
+def set_conversation_state(
+    whatsapp_id: str, active_module: str, active_flow: str,
+    flow_context: dict | None = None,
+) -> None:
     """Record (or refresh) a pending flow for this participant, always
     resetting the 30-minute expiry — a module calls this every turn its own
     reply still leaves a question open, so a flow that's still genuinely
-    active never goes stale mid-exchange."""
+    active never goes stale mid-exchange.
+
+    `flow_context` (DIALOGUE_STATE_REDESIGN.md phase 1): the caller's
+    app.dialogue.state.Slots.to_json(), dual-written for comparison against
+    the existing active_flow/customers columns — optional, and not yet read
+    by anything. Omitted (or None) writes '{}', same as before this param
+    existed, for every call site not yet updated to assert it."""
     db.execute(
-        """INSERT INTO conversation_state (whatsapp_id, active_module, active_flow, updated_at, expires_at)
-           VALUES (%s, %s, %s, now(), now() + INTERVAL '30 minutes')
+        """INSERT INTO conversation_state
+               (whatsapp_id, active_module, active_flow, flow_context, updated_at, expires_at)
+           VALUES (%s, %s, %s, %s, now(), now() + INTERVAL '30 minutes')
            ON CONFLICT (whatsapp_id) DO UPDATE
                SET active_module = EXCLUDED.active_module,
                    active_flow   = EXCLUDED.active_flow,
+                   flow_context  = EXCLUDED.flow_context,
                    updated_at    = now(),
                    expires_at    = now() + INTERVAL '30 minutes'""",
-        (whatsapp_id, active_module, active_flow),
+        (whatsapp_id, active_module, active_flow, json.dumps(flow_context or {})),
     )
 
 
@@ -449,7 +461,8 @@ def clear_conversation_state_if_owner(whatsapp_id: str, active_module: str) -> N
     unrelated enquiry must not wipe out a still-open Module B enrolment
     confirmation the participant hasn't gotten back to yet."""
     db.execute(
-        "UPDATE conversation_state SET active_module = NULL, active_flow = NULL, updated_at = now()"
+        "UPDATE conversation_state SET active_module = NULL, active_flow = NULL,"
+        " flow_context = '{}'::jsonb, updated_at = now()"
         " WHERE whatsapp_id = %s AND active_module = %s",
         (whatsapp_id, active_module),
     )
@@ -539,27 +552,69 @@ def bump_followup(phone: str) -> None:
 
 
 # ── Chat memory (keyed by whatsapp_id) ───────────────────────────────────────
+_EPISODE_IDLE_MINUTES = 60
+
+
+def current_session_id(whatsapp_id: str) -> str:
+    """The session_id for whatsapp_id's current episode (DIALOGUE_STATE_REDESIGN.md
+    phase 2) — reused if their last message (either role) was within
+    _EPISODE_IDLE_MINUTES, otherwise a fresh one is minted. Without this,
+    chat_memory has no notion of a conversation boundary at all — a window
+    scoped to "the last N turns" can silently span across days, so today's
+    message gets classified alongside Saturday's reply."""
+    row = db.query_one(
+        "SELECT session_id FROM chat_memory WHERE whatsapp_id = %s"
+        " AND created_at > now() - (%s * INTERVAL '1 minute') AND session_id IS NOT NULL"
+        " ORDER BY created_at DESC LIMIT 1",
+        (whatsapp_id, _EPISODE_IDLE_MINUTES),
+    )
+    if row and row.get("session_id"):
+        return row["session_id"]
+    return uuid.uuid4().hex[:12]
+
+
 def add_memory(whatsapp_id: str, role: str, content: str) -> None:
     """Append a conversation turn to this user's history.
 
     whatsapp_id is the stable partition key — one user's history is always
     isolated from another's regardless of whether they share a real phone or
-    whether the phone is known yet.
+    whether the phone is known yet. Stamped with current_session_id() so a
+    later reader can scope a window to "this episode" rather than just "the
+    last N rows" (phase 2) — the user/assistant pair from the same turn
+    always land in the same episode since they're written moments apart.
     """
     db.execute(
-        "INSERT INTO chat_memory (whatsapp_id, role, content) VALUES (%s, %s, %s)",
-        (whatsapp_id, role, content),
+        "INSERT INTO chat_memory (whatsapp_id, role, content, session_id) VALUES (%s, %s, %s, %s)",
+        (whatsapp_id, role, content, current_session_id(whatsapp_id)),
     )
 
 
-def recent_memory(whatsapp_id: str, limit: int = 10) -> list[dict]:
-    """Return the last `limit` turns for this user, oldest first."""
-    rows = db.query_all(
-        """SELECT role, content FROM chat_memory
-           WHERE whatsapp_id = %s
-           ORDER BY created_at DESC LIMIT %s""",
-        (whatsapp_id, limit),
-    )
+def recent_memory(
+    whatsapp_id: str, limit: int = 10, session_id: str | None = None,
+) -> list[dict]:
+    """Return the last `limit` turns for this user, oldest first.
+
+    `session_id` (phase 2): optional — when given, scopes to just that
+    episode instead of this whatsapp_id's entire history. Every existing
+    caller omits it and keeps reading the full history unchanged; only the
+    Router's own window (crews/router.py: _recent_history()) passes it, since
+    routing accuracy — not what a module's own multi-turn conversational
+    context should span — is what phase 2 is about.
+    """
+    if session_id:
+        rows = db.query_all(
+            """SELECT role, content FROM chat_memory
+               WHERE whatsapp_id = %s AND session_id = %s
+               ORDER BY created_at DESC LIMIT %s""",
+            (whatsapp_id, session_id, limit),
+        )
+    else:
+        rows = db.query_all(
+            """SELECT role, content FROM chat_memory
+               WHERE whatsapp_id = %s
+               ORDER BY created_at DESC LIMIT %s""",
+            (whatsapp_id, limit),
+        )
     return list(reversed(rows))
 
 

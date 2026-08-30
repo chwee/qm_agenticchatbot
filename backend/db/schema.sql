@@ -128,6 +128,14 @@ CREATE TABLE IF NOT EXISTS conversation_state (
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     expires_at      TIMESTAMPTZ         -- stale flows auto-release rather than trapping later turns
 );
+-- DIALOGUE_STATE_REDESIGN.md phase 1 — dual-write only, nothing reads this
+-- back to decide anything yet. Holds app.dialogue.state.Slots.to_json(): the
+-- resolved course/intake/invoice and the candidate list actually offered,
+-- keyed implicitly by whichever PendingQuestion active_flow represents.
+-- Distinguishes sub-stages active_flow alone can't (e.g. module_a.py's
+-- reminder flow writes 'awaiting_reminder' for three different questions —
+-- see app/dialogue/state.py's PendingQuestion docstring).
+ALTER TABLE conversation_state ADD COLUMN IF NOT EXISTS flow_context JSONB NOT NULL DEFAULT '{}'::jsonb;
 
 -- ── Leads (legacy alias — kept for backward compat) ──────────────────────────
 -- New code should use the customers table directly.
@@ -243,6 +251,14 @@ CREATE TABLE IF NOT EXISTS chat_memory (
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_chat_memory_wid ON chat_memory(whatsapp_id, created_at);
+-- DIALOGUE_STATE_REDESIGN.md phase 2 (episode segmentation) — every row gets
+-- the whatsapp_id's current episode's id (repositories.current_session_id():
+-- reused across a burst of activity, a fresh one minted after a 60-minute
+-- gap). What actually stops the Router's window spanning across days — a
+-- plain created_at-DESC LIMIT alone has no idea "6 turns ago" might have been
+-- Saturday.
+ALTER TABLE chat_memory ADD COLUMN IF NOT EXISTS session_id TEXT;
+CREATE INDEX IF NOT EXISTS idx_chat_memory_session ON chat_memory(whatsapp_id, session_id, created_at);
 
 -- ── Staff escalation queue ───────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS staff_queue (

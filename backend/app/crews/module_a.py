@@ -14,6 +14,7 @@ import re
 from .. import context
 from .. import repositories as repo
 from ..config import settings
+from ..dialogue import PendingQuestion, Slots, TurnResult, log_dialogue_state
 from ..faq import FAQ_KNOWLEDGE_BASE
 from ..services import courses as course_svc
 from ..services import leads
@@ -817,7 +818,7 @@ def build_agent(*, allow_delegation: bool = False):
     )
 
 
-def _run_agent(body: str) -> str:
+def _run_agent(body: str) -> TurnResult:
     wid = context.whatsapp_id()
     history = repo.recent_memory(wid, limit=8)
     convo = "\n".join(f"{m['role']}: {m['content']}" for m in history) or "(no prior messages)"
@@ -861,8 +862,12 @@ def _run_agent(body: str) -> str:
         if not known_email_now:
             mentioned = _courses_mentioned(course_context)
             if len(mentioned) > 1 and not _resolve_course_choice(body, mentioned):
-                repo.set_conversation_state(wid, "A", "awaiting_reminder")
-                return f"Sure! {_REMINDER_EMAIL_ASK_MARKER}"
+                slots = Slots(candidates=tuple(c["name"] for c in mentioned))
+                log_dialogue_state(log, wid, PendingQuestion.EMAIL_FOR_REMINDER, slots)
+                return TurnResult(
+                    reply=f"Sure! {_REMINDER_EMAIL_ASK_MARKER}", module="A",
+                    pending=PendingQuestion.EMAIL_FOR_REMINDER, slots=slots,
+                )
 
     reminder_directive = _reminder_directive(body, pending, customer, reminder_window, course_context)
     course_note = _explicit_course_note(body)
@@ -920,6 +925,12 @@ def _run_agent(body: str) -> str:
     # determination, is ever treated as ground truth for "which course"
     # and "is a date still needed" — one source of truth instead of two
     # that can silently disagree.
+    # phase 4: captured instead of written directly — defaults (NONE, empty
+    # Slots) are exactly correct for every branch below that clears state,
+    # so a branch that clears needs no explicit assignment at all.
+    pending_result = PendingQuestion.NONE
+    slots_result = Slots()
+
     if pending:
         fresh_customer = repo.get_or_create_customer(wid)
 
@@ -979,13 +990,30 @@ def _run_agent(body: str) -> str:
                 if stale_course and stale_date:
                     repo.delete_reminder(wid, stale_course, stale_date)
             names = "; ".join(c["name"] for c in mentioned)
-            repo.set_conversation_state(wid, "A", "awaiting_reminder")
-            return (
-                f"Got it — I have your email on file. We discussed a few courses ({names}) — "
-                f"{_WHICH_COURSE_ASK_TEXT}"
+            slots = Slots(candidates=tuple(c["name"] for c in mentioned))
+            log_dialogue_state(log, wid, PendingQuestion.WHICH_COURSE, slots)
+            # reminder_window already containing this same ask means the
+            # participant's reply just now didn't resolve to one of the
+            # courses discussed — say so instead of silently repeating the
+            # identical question with no acknowledgement (matches the
+            # intake-ask backstop below).
+            if _COURSE_ASK_CONTEXT_RE.search(reminder_window) and not _DECLINE_RE.search(body):
+                return TurnResult(
+                    reply=(
+                        f"Sorry, I didn't catch which course you meant — could you name one of "
+                        f"these: {names}?"
+                    ),
+                    module="A", pending=PendingQuestion.WHICH_COURSE, slots=slots,
+                )
+            return TurnResult(
+                reply=(
+                    f"Got it — I have your email on file. We discussed a few courses ({names}) — "
+                    f"{_WHICH_COURSE_ASK_TEXT}"
+                ),
+                module="A", pending=PendingQuestion.WHICH_COURSE, slots=slots,
             )
 
-        _course, schedules = _course_schedules_for(fresh_customer)
+        course, schedules = _course_schedules_for(fresh_customer)
         email_known = bool(fresh_customer.get("email"))
         if email_known and len(schedules) > 1:
             course_date_after = fresh_customer.get("course_date")
@@ -1020,36 +1048,55 @@ def _run_agent(body: str) -> str:
                     repo.delete_reminder(wid, bad_course, course_date_after)
                 course_date_after = ""
             if not course_date_after:
+                # Name the course, not just the bare dates — a customer
+                # discussing multiple courses earlier in the conversation
+                # has no way to know which one these dates belong to
+                # otherwise (observed live: "Which intake date should I
+                # remind you about? We have 08-09 Sep 2026; 13-14 Oct
+                # 2026." with no course named at all).
+                course_name = (course or {}).get("name") or "this course"
                 options = "; ".join(s.get("label") or "" for s in schedules)
-                reply = (
-                    f"Got it — I've saved your interest, and I have your email on file. "
-                    f"{_REMINDER_DATE_ASK_TEXT} We have {options}."
+                # Same repeat-detection as the course-ambiguity backstop
+                # above: reminder_window already containing this ask means
+                # the reply just given didn't resolve to a real intake —
+                # acknowledge that instead of silently repeating it.
+                if _INTAKE_ASK_CONTEXT_RE.search(reminder_window) and not _DECLINE_RE.search(body):
+                    reply = (
+                        f"Sorry, I didn't catch which intake you meant. "
+                        f"{_REMINDER_DATE_ASK_TEXT} {course_name} has: {options}."
+                    )
+                else:
+                    reply = (
+                        f"Got it — I've saved your interest in \"{course_name}\", and I have your "
+                        f"email on file. {_REMINDER_DATE_ASK_TEXT} {course_name} has: {options}."
+                    )
+                slots = Slots(
+                    course_code=(course or {}).get("course_id"),
+                    candidates=tuple(s.get("label") or "" for s in schedules),
                 )
-                repo.set_conversation_state(wid, "A", "awaiting_reminder")
-            else:
-                # A specific intake resolved this turn (or was already on
-                # file) — the reminder is complete, nothing left to ask.
-                repo.clear_conversation_state_if_owner(wid, "A")
+                log_dialogue_state(log, wid, PendingQuestion.WHICH_INTAKE, slots)
+                pending_result, slots_result = PendingQuestion.WHICH_INTAKE, slots
+            # else: a specific intake resolved this turn (or was already on
+            # file) — the reminder is complete, nothing left to ask; the
+            # NONE/empty defaults set above are already correct.
         elif email_known:
-            # Email known, course known, single intake (or none needing
-            # disambiguation) — the reminder resolves without a date question.
-            repo.clear_conversation_state_if_owner(wid, "A")
+            pass  # course known, single intake — resolves with no date question; defaults stand
         else:
             # Email still not known (this course was never ambiguous, so
             # the pre-agent short-circuit above never fired) — the agent's
             # own reply is presumably asking for it; still open regardless
             # of how many intakes this course has.
-            repo.set_conversation_state(wid, "A", "awaiting_reminder")
-    else:
-        # No reminder was in play this turn at all (pending is False) —
-        # release any stale flow from an earlier, abandoned reminder rather
-        # than leaving it to trap an unrelated future reply.
-        repo.clear_conversation_state_if_owner(wid, "A")
+            slots = Slots(course_code=(course or {}).get("course_id"))
+            log_dialogue_state(log, wid, PendingQuestion.EMAIL_FOR_REMINDER, slots)
+            pending_result, slots_result = PendingQuestion.EMAIL_FOR_REMINDER, slots
+    # else: no reminder was in play this turn at all (pending is False) —
+    # the NONE/empty defaults release any stale flow from an earlier,
+    # abandoned reminder rather than leaving it to trap a future turn.
 
-    return reply
+    return TurnResult(reply=reply, module="A", pending=pending_result, slots=slots_result)
 
 
-def run(payload: dict, route: dict) -> str:
+def run(payload: dict, route: dict) -> TurnResult:
     # Every enquiry updates the lead/customer record, regardless of
     # registration stage or whether contact details were volunteered
     # (Requirement 4 AC7) — best-effort, never blocks the reply.
@@ -1060,17 +1107,18 @@ def run(payload: dict, route: dict) -> str:
 
     body = (payload.get("message") or {}).get("body", "")
     if not settings.openai_api_key:
-        return _fallback_reply()
+        return TurnResult(reply=_fallback_reply(), module="A")
 
     wid = context.whatsapp_id()
     enrollment_before = (repo.latest_enrollment(wid) or {}).get("id")
 
     try:
-        reply = _run_agent(body)
+        result = _run_agent(body)
     except Exception as e:  # noqa: BLE001
         log.error("Module A agent failed: %s", e)
-        return _fallback_reply()
+        return TurnResult(reply=_fallback_reply(), module="A")
 
+    reply = result.reply
     if _FABRICATED_ENROLLMENT_RE.search(reply):
         # Verified against a fresh DB read (was a NEW enrollment id created
         # since the top of this turn?), not context.enrollment_was_created().
@@ -1094,4 +1142,10 @@ def run(payload: dict, route: dict) -> str:
             )
             reply = _enrollment_claim_fallback()
 
-    return reply
+    # Only the reply text is ever swapped by the fabrication guard above —
+    # the pending-question/slots decision _run_agent() already made is
+    # unrelated to whether ITS OWN reply hallucinated an enrollment, and is
+    # carried through unchanged either way (matches old behaviour exactly:
+    # the state write used to happen entirely inside _run_agent(), before
+    # this guard ever ran).
+    return TurnResult(reply=reply, module="A", pending=result.pending, slots=result.slots)

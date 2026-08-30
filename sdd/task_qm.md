@@ -3,14 +3,17 @@
 ## Document Information
 
 - **Feature Name**: Q&M AI-Powered Enquiry & Enrollment System (WhatsApp Agentic Backend)
-- **Version**: 1.25
-- **Date**: 2026-08-23
+- **Version**: 1.31
+- **Date**: 2026-08-30
 - **Author**: Q&M / WA_CrewAI project team
 - **Related Documents**:
   - Requirements: [sdd/requirement_qm.md](requirement_qm.md)
   - Design: [sdd/design_qm.md](design_qm.md)
 
 ## Version History
+
+### v1.31 — 2026-08-30 (implementation complete)
+Carries forward `requirement_qm.md`/`design_qm.md` v1.31 — see Task 51 below. This top-of-file narrative section stopped being updated per-version after v1.25 while the task list itself continued (Tasks 26–50 cover v1.26–v1.30); not backfilled here, only Task 51 is new.
 
 ### v1.25 — 2026-08-23 (implementation complete)
 Carries forward `requirement_qm.md` v1.25 — course-ambiguity guard for the reminder flow (Requirement 4 AC15), an explicit feature request: don't recall/guess which course a reminder is for when several were discussed, ask explicitly, for both the bot-offered and participant-initiated paths. Implementation surfaced four compounding bugs, each root-caused via the live query log before being fixed, then re-verified live end to end (multi-course ambiguous flow through to a correctly-saved reminder; single-course flow confirmed to still skip the extra question; decline path; the numbered-intake-list enrolment regression from Task 40; full enrolment-to-invoice path) — all previously-passing scenarios unaffected.
@@ -851,6 +854,15 @@ Tasks for Phases 1–8 describe the system as it exists in this repository today
   - _Requirements: 4 (AC2)_
   - _Complexity: Small · Risk: Low (validation added at the one call site that lacked it, reusing an existing, already-trusted resolver and lookup — no change to how any other course-reference call site behaves)_
 
+- [x] 51. Session-scoped, participant-only classifier context + pending-flow-aware routing signal (`crews/router.py`, `tools/course_tools.py`, `dialogue/state.py`, `repositories.py`, `database.py`, `db/schema.sql`)
+  - **Traced via the live query log across two separate days** (`query_log_2026-08-25.txt`, `query_log_2026-08-28.txt`) to the same misroute pattern recurring in unrelated conversations: a short, topic-less continuation of a course enquiry — "Ya, how about course 2", "what course 2", "no. How about course 2" — was repeatedly misclassified ENROLLMENT and forced into Module B's registration-completeness prompt, each time requiring the participant to correct the bot. Root cause: `classify_free_text()`'s prompt included the last 6 chat turns' raw text, both roles, with no bound on how far back "recent" reached — a message with no topic of its own has nothing reliable to anchor against once the assistant's own wording (potentially from an unrelated, much earlier conversation) is mixed in unbounded.
+  - Fixed per `docs/MEMORY_CONTEXT_REDESIGN.md` Phases 2–2.1: new `chat_memory.session_id` column (`database.py`, `db/schema.sql`) + `repositories.current_session_id()` — reuses the participant's current session id if their last message was under 60 minutes ago, else mints a fresh one. `router.py: _recent_history()` now scopes its fetch to the current session. The classifier prompt itself no longer includes any raw assistant text at all — rebuilt from only `participant_turns[-3:]` (the participant's own last 3 messages) plus one new fixed-vocabulary line from `_assistant_last_action()` (a closed label set — `listed_courses`, `asked_which_intake_for_reminder`, etc. — regex-derived from the last assistant turn's content, never free text). Verified against 9 historical misroute cases found this way, replayed live through the current router via a new permanent regression harness, `backend/evals/replay_router_misroutes.py` (parses `query_log_*.txt`, seeds a scratch conversation with the real preceding turns, calls the live router): the session-scoped participant-only window alone fixed 5/9; the remaining 4 shared a shape (a short "how about course N" with only 1–2 prior participant turns) that needed `_assistant_last_action()` added back, in this narrower structured form, before all 9 passed — an early version that stripped assistant context entirely had overcorrected.
+  - **Second, narrower gap found in the same area (`docs/DIALOGUE_STATE_REDESIGN.md` Phase 3)**: `_explicit_module_signal()` treated ANY course/schedule code match as an unconditional signal to break Tier 0 sticky dispatch out to Tier 1 classification — including a participant simply repeating the course already under discussion (e.g. restating "C2601" mid-reminder for that same course), forcing an unneeded classification round-trip. New `_restates_pending_course(body, state)` checks the matched code against the pending flow's own `conversation_state.flow_context` (`course_code`/`schedule_code`/`candidates` — dual-written by Module A/B's `TurnResult.slots` since v1.28's Phase 1 groundwork, but never read back to affect a routing decision until now); a code only counts as a genuine switch signal when it names something different from what's already pending. Falls back to the prior unconditional behaviour whenever `flow_context` is empty, so an older flow that predates this dual-write cannot regress.
+  - **Separately, an unrelated bug found while reviewing the same code path**: an incidental course-schedule lookup made mid-reminder (e.g. idly asking about a different course's dates while still finishing a reminder for the first one) silently overwrote `customers.preferred_course` via `tools/course_tools.py: _remember_interest()` — the reminder's own later "which intake?" question then resolved against the wrong course. Fixed by gating `_remember_interest()` on `conversation_state`: while `active_module=="A"` and `active_flow=="awaiting_reminder"` for this participant, an incidental lookup's course is not written to `preferred_course`.
+  - Verified live: the exact reported misroute triggers now correctly stay ENQUIRY (confirmed via `query_log`); the `replay_router_misroutes.py` harness reports 9/9 on its historical case set; restating a pending course code mid-flow no longer trips an unnecessary classification round-trip; an incidental cross-course lookup mid-reminder no longer corrupts the reminder's own course. Re-verified unaffected: the full Task 44–50 regression set (sticky dispatch, payment-mid-reminder override, confidence-gated disambiguation, Module C reroute, conversational cancellation, reminder dispatch, credit-note fan-out, the Task 49/50 reminder-integrity fixes).
+  - _Requirements: 3 (AC3, AC11), 4 (AC2)_
+  - _Complexity: Large · Risk: Low (the classifier-context change is scoped to the LLM prompt only — every deterministic override (AC5/AC7/AC8) still reads the unchanged 6-turn/mixed-role fetch; `_restates_pending_course` and the course_tools.py guard both fall back to prior behaviour whenever `flow_context`/`conversation_state` is absent, so neither can regress a flow that predates this work)_
+
 ---
 
 ## Requirements Traceability
@@ -861,8 +873,8 @@ Every requirement in `requirement_qm.md` is covered by at least one task above. 
 |---|---|
 | 1 — WhatsApp Message Gateway & Delivery | 1, 4, 4.1, 21 |
 | 2 — Progressive Registration | 5, 6, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 10.3, 29 |
-| 3 — Intent Routing | 7, 8, 8.1, 9.6, 33, 34, 37, 40, 44, 45, 46, 47, 49 |
-| 4 — Module A: Enquiry & Lead Capture | 9, 9.1, 9.2, 9.3, 9.4, 9.5, 9.6, 17, 30, 31, 32, 35, 36, 38, 39, 42, 44, 49, 50 |
+| 3 — Intent Routing | 7, 8, 8.1, 9.6, 33, 34, 37, 40, 44, 45, 46, 47, 49, 51 |
+| 4 — Module A: Enquiry & Lead Capture | 9, 9.1, 9.2, 9.3, 9.4, 9.5, 9.6, 17, 30, 31, 32, 35, 36, 38, 39, 42, 44, 49, 50, 51 |
 | 5 — Module B: Enrollment Pipeline | 2, 10, 10.1, 10.2, 10.3, 10.4, 10.5, 10.6, 10.7, 10.8, 16, 17, 27, 28 |
 | 6 — Module C: Payment Verification & Receipts | 2, 10.6, 11, 11.1, 11.2, 16, 17 |
 | 7 — Free-Text-Only Interaction (Slash Commands Removed) | 7, 7.1, 9.2, 10.2, 11.2, 16 |

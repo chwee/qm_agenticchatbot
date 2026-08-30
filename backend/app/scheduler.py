@@ -112,38 +112,43 @@ def start() -> None:
     if not settings.scheduler_enabled or _scheduler is not None:
         return
     _scheduler = BackgroundScheduler(timezone="Asia/Singapore")
-    _scheduler.add_job(
-        run_followups,
-        CronTrigger(hour=settings.followup_check_cron_hour, minute=0),
-        id="nurture_followups",
-        replace_existing=True,
-    )
-    _scheduler.add_job(
-        run_nightly_report,
-        CronTrigger(hour=settings.nightly_report_cron_hour, minute=0),
-        id="nightly_report",
-        replace_existing=True,
-    )
-    _scheduler.add_job(
-        run_reminder_dispatch,
-        CronTrigger(hour=settings.reminder_dispatch_cron_hour, minute=0),
-        id="reminder_dispatch",
-        replace_existing=True,
-    )
-    _scheduler.add_job(
-        payment_service.dispatch_pending_credit_notes,
-        IntervalTrigger(minutes=settings.credit_note_dispatch_interval_minutes),
-        id="credit_note_dispatch",
-        replace_existing=True,
-    )
+    started: list[str] = []
+    if settings.scheduler_followups_enabled:
+        _scheduler.add_job(
+            run_followups,
+            CronTrigger(hour=settings.followup_check_cron_hour, minute=0),
+            id="nurture_followups",
+            replace_existing=True,
+        )
+        started.append(f"follow-ups {settings.followup_check_cron_hour:02d}:00")
+    if settings.scheduler_nightly_report_enabled:
+        _scheduler.add_job(
+            run_nightly_report,
+            CronTrigger(hour=settings.nightly_report_cron_hour, minute=0),
+            id="nightly_report",
+            replace_existing=True,
+        )
+        started.append(f"nightly report {settings.nightly_report_cron_hour:02d}:00")
+    if settings.scheduler_reminder_dispatch_enabled:
+        _scheduler.add_job(
+            run_reminder_dispatch,
+            CronTrigger(hour=settings.reminder_dispatch_cron_hour, minute=0),
+            id="reminder_dispatch",
+            replace_existing=True,
+        )
+        started.append(f"reminder dispatch {settings.reminder_dispatch_cron_hour:02d}:00")
+    if settings.scheduler_credit_note_dispatch_enabled:
+        _scheduler.add_job(
+            payment_service.dispatch_pending_credit_notes,
+            IntervalTrigger(minutes=settings.credit_note_dispatch_interval_minutes),
+            id="credit_note_dispatch",
+            replace_existing=True,
+        )
+        started.append(f"credit-note dispatch every {settings.credit_note_dispatch_interval_minutes} min")
     _scheduler.start()
     log.info(
-        "Scheduler started (follow-ups %02d:00, nightly report %02d:00, "
-        "reminder dispatch %02d:00 SGT; credit-note dispatch every %d min).",
-        settings.followup_check_cron_hour,
-        settings.nightly_report_cron_hour,
-        settings.reminder_dispatch_cron_hour,
-        settings.credit_note_dispatch_interval_minutes,
+        "Scheduler started (%s SGT).",
+        "; ".join(started) if started else "no jobs enabled",
     )
 
 

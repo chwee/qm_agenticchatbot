@@ -22,6 +22,7 @@ import re
 from .. import context
 from .. import repositories as repo
 from ..config import settings
+from ..dialogue import PendingQuestion, Slots, TurnResult, log_dialogue_state
 from ..services import payments
 from ..tools import MODULE_C_TOOLS
 from ._base import kickoff_agent
@@ -54,6 +55,55 @@ _REROUTE_RE = re.compile(r"^REROUTE:([AB])$")
 
 # Pulls an invoice number out of a free-text caption, e.g. "pay for INV-2026-0861".
 _INVOICE_RE = re.compile(r"\bINV-\d{4}-\d{4}\b", re.IGNORECASE)
+
+# ── General "how/what to pay" question — answered deterministically ─────────
+# A bare question about payment METHODS (not a specific invoice/balance) is
+# answered without ever invoking the LLM agent at all. Prompt-only compliance
+# was tried first (an explicit backstory rule: "answer generically, do not
+# name any course mentioned earlier for an unrelated reason") and proved
+# unreliable — observed live: "what is the course payment methods?", asked
+# right after an unrelated reminder-flow exchange about a DIFFERENT course,
+# still opened with "For the [that unrelated course]..." even with the rule
+# in place. The conversation history's most recent course mention is simply
+# too salient for the model to reliably ignore on instruction alone — the
+# same "prompt-only compliance for a consequential decision proved
+# unreliable" lesson already applied everywhere else in this codebase
+# (module_a.py/module_b.py's markers, router.py's overrides). A deterministic
+# short-circuit removes the risk entirely rather than asking the model not
+# to take it.
+_PAYMENT_METHODS_QUESTION_RE = re.compile(
+    r"\bpayment\s+methods?\b|\bhow\s+(?:do|can|to)\s+(?:i|we|you)\s+pay\b|"
+    r"\bhow\s+to\s+pay\b|\bways?\s+to\s+pay\b|\bhow\s+(?:do\s+you|does\s+this)\s+accept\s+payment\b",
+    re.IGNORECASE,
+)
+# Any of these means the question is actually about a SPECIFIC invoice/
+# balance/course, not payment methods in general — the LLM agent handles it
+# instead, with the full conversation history it needs for that.
+_SPECIFIC_PAYMENT_SIGNAL_RE = re.compile(
+    r"\bINV-\d{4}-\d{4}\b|\b[Cc]\d{4}\b|\bowe\b|\bbalance\b|\bstill\s+(?:owe|need|pay)\b|"
+    r"\bmy\s+(?:invoice|balance|enrollment|enrolment|course)\b",
+    re.IGNORECASE,
+)
+
+
+def _general_payment_methods_reply(body: str) -> str | None:
+    """Deterministic answer for a bare 'what payment methods do you accept' /
+    'how do I pay' question — None if `body` doesn't have that shape, or
+    names a specific invoice/course/balance (in which case the LLM agent
+    below handles it, since that needs the full conversation context this
+    function deliberately never looks at)."""
+    body = body or ""
+    if not _PAYMENT_METHODS_QUESTION_RE.search(body):
+        return None
+    if _SPECIFIC_PAYMENT_SIGNAL_RE.search(body):
+        return None
+    return (
+        "You can pay by attaching either a PayNow transfer confirmation screenshot, a "
+        "SkillsFuture claim confirmation screenshot, or both — whichever your invoice needs "
+        "— right here in this chat, mentioning your invoice number in the same message.\n\n"
+        "If you're not sure which one your invoice needs, or don't have your invoice number "
+        "handy, just ask and I'll look it up for you."
+    )
 
 # Deterministic list-position disambiguation. A participant with more than
 # one enrollment (especially two in the SAME course on different intake
@@ -191,6 +241,27 @@ def _run_agent(body: str) -> str:
             "staff member would text back, not a rigid printout. Any code, invoice number, "
             "or amount a tool returns must be carried over exactly — never round, reword, or "
             "guess one. Keep replies short for WhatsApp.\n\n"
+            "IMPORTANT — a GENERAL 'how do I pay' / 'what payment methods do you accept' "
+            "question (no specific invoice, course, or balance being asked about) is answered "
+            "GENERICALLY, directly, without calling any tool: payment is submitted by attaching "
+            "either a PayNow transfer confirmation screenshot, a SkillsFuture claim confirmation "
+            "screenshot, or both — whichever their invoice needs — mentioning their invoice "
+            "number in the same message. Do NOT call 'My Enrollments' or 'Resend Invoice' just "
+            "to answer this general question — those are for resolving a SPECIFIC invoice, not "
+            "for explaining how payment works in general, and calling them here produces a "
+            "confusing answer about an enrollment the participant never asked about. Do NOT name "
+            "any particular course in this generic answer either, even one mentioned earlier in "
+            "the conversation for a completely unrelated reason (browsing the catalogue, asking "
+            "about a reminder) — a bare mention like that does NOT make this new message about "
+            "that course's payment specifically, and naming it anyway is just as misleading as "
+            "calling the tools (observed live: 'what is the course payment methods?', asked "
+            "right after an unrelated reminder request, first triggered wrongly-scoped tool "
+            "calls claiming 'no enrollment' and resending a different invoice with no "
+            "explanation; even after that was fixed, the answer still opened with 'For the "
+            "[unrelated course]...' as if the question had been about that course all along, "
+            "which is equally confusing). Only mention a specific course/invoice when the "
+            "participant's OWN new message actually names one, or once they go on to ask about "
+            "THEIR balance, THEIR invoice number, or say they're ready to pay a specific one.\n\n"
             "IMPORTANT — if this genuinely isn't about payment:\n"
             "You have no tools for general course/fee/schedule questions or for creating/"
             "changing an enrollment. If — and ONLY if — the message has NO payment framing "
@@ -224,6 +295,11 @@ def _run_agent(body: str) -> str:
             "resolved which invoice the participant means — use exactly that invoice number, "
             "skip straight to acting on it, and do not call a tool that might return a "
             "different enrollment.\n"
+            "  - Otherwise, if this is a GENERAL question about how to pay or what payment "
+            "methods/proof types are accepted — no specific invoice, course, or balance being "
+            "asked about — answer it directly per your role instructions' 'how do I pay' rule, "
+            "with NO tool call at all. Check this BEFORE assuming any course mentioned earlier "
+            "in the conversation is what this new message is about.\n"
             "  - Otherwise, if the participant refers to a specific enrollment by list position "
             "(e.g. 'item 2', 'course list 2', 'the second one') or by a course name plus intake "
             "date, and a numbered list matching that reference already exists in the history "
@@ -280,10 +356,36 @@ def _run_agent(body: str) -> str:
             )
             return _fallback_reply()
         raise RerouteRequested(m.group(1), reason=f"not a payment question: {body!r}")
+
+    # DIALOGUE_STATE_REDESIGN.md phase 1 — observational only. Unlike
+    # module_a.py/module_b.py, Module C never calls set_conversation_state()
+    # at all: a documented gap (see docs/DIALOGUE_STATE_REDESIGN.md), not
+    # something this phase changes — giving Module C real ownership here
+    # would be an actual routing behaviour change (the Router's Tier 0
+    # sticky dispatch would start handing subsequent turns back to Module C
+    # when it doesn't today), which is out of scope for a dual-write. This
+    # only logs what WOULD be asserted if this flow were ever given
+    # ownership, so later phases have real data on how often that gap
+    # matters — it deliberately never calls set_conversation_state.
+    inv_m = _INVOICE_RE.search(raw) or _INVOICE_RE.search(body)
+    log_dialogue_state(
+        log, wid, PendingQuestion.PAYMENT_PROOF,
+        Slots(invoice_no=inv_m.group(0).upper() if inv_m else None),
+    )
     return raw
 
 
-def run(payload: dict, route: dict) -> str:
+def run(payload: dict, route: dict) -> TurnResult:
+    # phase 4: conforms to the same TurnResult contract as module_a/b for
+    # orchestrator._dispatch() — but, unlike those two, Module C is
+    # deliberately given NO real pending-question ownership here (every
+    # return below defaults to pending=NONE). That's unchanged from before
+    # this phase: Module C has never called set_conversation_state() at all
+    # (see docs/DIALOGUE_STATE_REDESIGN.md's "still open" notes) — giving it
+    # one now would be an actual routing behaviour change (Tier 0 sticky
+    # dispatch would start handing subsequent turns back to Module C), not
+    # a mechanical relocation of an existing write, so it's left for a
+    # separate, explicit decision rather than folded into this refactor.
     data, mimetype = context.media()
     wid   = context.whatsapp_id()
     phone = context.phone()
@@ -303,7 +405,15 @@ def run(payload: dict, route: dict) -> str:
     # none is stated anywhere, so this still completes even with a bare
     # screenshot and no caption at all.
     if data:
-        return payments.process_payment(wid, phone, data, mimetype, invoice_no)
+        reply = payments.process_payment(wid, phone, data, mimetype, invoice_no)
+        return TurnResult(reply=reply, module="C")
+
+    # A bare "what payment methods / how do I pay" question — deterministic,
+    # bypasses the LLM entirely (see _general_payment_methods_reply()'s own
+    # comment for why prompt-only compliance proved unreliable here).
+    general_reply = _general_payment_methods_reply(body)
+    if general_reply is not None:
+        return TurnResult(reply=general_reply, module="C")
 
     # Free-text payment intent, no image — receipt resends, "what do I still
     # owe", and "I paid but forgot to attach the screenshot" are all handled
@@ -311,13 +421,13 @@ def run(payload: dict, route: dict) -> str:
     # API key); there is no deterministic /receipt or /pay-no-image shortcut
     # any more (Requirement 7).
     if not settings.openai_api_key:
-        return _fallback_reply()
+        return TurnResult(reply=_fallback_reply(), module="C")
     try:
-        return _run_agent(body)
+        return TurnResult(reply=_run_agent(body), module="C")
     except RerouteRequested:
         # Requirement 3 AC14 — never swallow this into the generic fallback;
         # orchestrator._dispatch() is what actually redirects the turn.
         raise
     except Exception as e:  # noqa: BLE001
         log.error("Module C agent failed: %s", e)
-        return _fallback_reply()
+        return TurnResult(reply=_fallback_reply(), module="C")

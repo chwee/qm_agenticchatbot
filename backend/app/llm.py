@@ -16,6 +16,13 @@ if settings.openai_api_key:
     os.environ.setdefault("OPENAI_API_KEY", settings.openai_api_key)
 
 
+# Both LLM clients otherwise fall back to their library defaults, which are
+# minutes long (OpenAI SDK: 600s; LiteLLM, behind crewai.LLM: similarly
+# unbounded) — a stalled request would silently hang a whole WhatsApp turn
+# instead of failing fast.
+_LLM_TIMEOUT_SECONDS = 30
+
+
 @lru_cache(maxsize=1)
 def get_crew_llm():
     """CrewAI LLM used by the Router, Module A and Module B agents."""
@@ -25,6 +32,7 @@ def get_crew_llm():
         model=f"openai/{settings.openai_model}",
         api_key=settings.openai_api_key or None,
         temperature=settings.openai_temperature,
+        timeout=_LLM_TIMEOUT_SECONDS,
     )
 
 
@@ -33,4 +41,8 @@ def get_openai_client():
     """Raw OpenAI client for Module C vision verification."""
     from openai import OpenAI
 
-    return OpenAI(api_key=settings.openai_api_key or None)
+    return OpenAI(
+        api_key=settings.openai_api_key or None,
+        timeout=_LLM_TIMEOUT_SECONDS,
+        max_retries=1,
+    )

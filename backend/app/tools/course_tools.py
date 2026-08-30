@@ -15,12 +15,24 @@ def _remember_interest(course_arg: str) -> None:
     reference, without depending on the conversational agent remembering to
     call 'Save Lead Data' proactively (prompt-only capture of this proved
     unreliable in live testing — the agent answered fee/schedule questions
-    correctly every time but essentially never called the tool for it)."""
+    correctly every time but essentially never called the tool for it).
+
+    Skipped while a reminder is already pending (conversation_state ==
+    Module A's "awaiting_reminder") — observed live: an unrelated schedule
+    lookup mid-exchange (e.g. answering "what course is that date for?")
+    silently swapped preferred_course to the looked-up course, and the next
+    turn's "which intake" reply then named the wrong course/dates entirely.
+    A reminder that's already down to picking an intake has its course
+    locked in; only an explicit course-choice reply should change it."""
     try:
+        wid = context.whatsapp_id()
+        state = repo.get_conversation_state(wid)
+        if state and state.get("active_module") == "A" and state.get("active_flow") == "awaiting_reminder":
+            return
         resolved = courses.resolve_course_arg(course_arg)
         c = repo.get_course_by_name(resolved)
         if c:
-            repo.update_customer(context.whatsapp_id(), preferred_course=c["name"])
+            repo.update_customer(wid, preferred_course=c["name"])
     except Exception:
         pass
 

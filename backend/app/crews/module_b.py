@@ -37,6 +37,7 @@ import re
 from .. import context
 from .. import repositories as repo
 from ..config import settings
+from ..dialogue import PendingQuestion, Slots, TurnResult, log_dialogue_state
 from ..services import courses as courses_svc
 from ..services import enrollment
 from ..tools import MODULE_B_TOOLS
@@ -65,6 +66,11 @@ _INTAKE_LIST_RE = re.compile(r"(?m)^\**\s*\d+\.\**\s+.*[Ss][Hh]\d{4}")
 # resolved it fine, but a strict "course" literal would silently miss it
 # here, defeating the whole detector for the very case it was built for.
 _COURSE_POSITION_RE = re.compile(r"\bcour\w{0,3}\s*(?:number\s*|no\.?\s*|#\s*)?(\d+)\b", re.IGNORECASE)
+# Same pattern as module_c.py's _INVOICE_RE — duplicated rather than
+# imported to avoid a cross-module dependency for one regex; used only for
+# DIALOGUE_STATE_REDESIGN.md phase 1's dual-write (extracting the invoice
+# number a cancellation summary names, into Slots.invoice_no).
+_INVOICE_RE = re.compile(r"\bINV-\d{4}-\d{4}\b", re.IGNORECASE)
 
 
 def _resolve_course_ref(text: str) -> str | None:
@@ -612,7 +618,7 @@ def build_specialist_agent(body: str, history: list[dict]):
     )
 
 
-def _run_agent(body: str) -> str:
+def _run_agent(body: str) -> TurnResult:
     customer = context.customer()
     profile_name  = customer.get("full_name") or ""
     profile_nric  = customer.get("nric")      or ""
@@ -684,31 +690,61 @@ def _run_agent(body: str) -> str:
     # logic above — this only observes the outcome it already produced.
     enrollment_after = (repo.latest_enrollment(wid) or {}).get("id")
     just_enrolled = enrollment_after is not None and enrollment_after != enrollment_before
+    # phase 4: captured instead of written directly — orchestrator._dispatch()
+    # is now the single place that actually calls repo.set_conversation_state()/
+    # clear_conversation_state_if_owner(), from the TurnResult this returns.
+    pending_result, slots_result = PendingQuestion.NONE, Slots()
     if just_enrolled:
-        # A genuine new enrolment was created this turn (DB-verified, not
-        # inferred from the reply text) — nothing left open, regardless of
-        # the confirmation naming the SH-code it just booked.
-        repo.clear_conversation_state_if_owner(wid, "B")
+        pass  # a genuine new enrolment was created (DB-verified) — nothing left open,
+        # regardless of the confirmation naming the SH-code it just booked; NONE/empty stand.
     elif reply.strip().lower().endswith(_CONFIRM_MARKER.lower()):
         # Step 3's summary-and-wait — awaiting the participant's explicit
         # agree/decline (_pending_confirmation() will recognise it next turn).
-        repo.set_conversation_state(wid, "B", "awaiting_enroll_confirm")
+        # DIALOGUE_STATE_REDESIGN.md phase 1: the confirmation summary is
+        # REQUIRED to name both codes in brackets (see build_specialist_agent()'s
+        # STEP 3 instructions), so re-extracting them from the reply here —
+        # the same regexes _pending_confirmation() will run against this
+        # exact text next turn — dual-writes what's already implicitly true.
+        c_m = _C_CODE_IN_TEXT.search(reply)
+        sh_m = _SH_CODE_IN_TEXT.search(reply)
+        slots = Slots(
+            course_code=c_m.group(1).upper() if c_m else None,
+            schedule_code=sh_m.group(1).upper() if sh_m else None,
+        )
+        log_dialogue_state(log, wid, PendingQuestion.CONFIRM_ENROL, slots)
+        pending_result, slots_result = PendingQuestion.CONFIRM_ENROL, slots
     elif reply.strip().lower().endswith(_CANCEL_CONFIRM_MARKER.lower()):
-        # Requirement 11 AC5's cancellation analogue — same reasoning.
-        repo.set_conversation_state(wid, "B", "awaiting_cancel_confirm")
+        # Requirement 11 AC5's cancellation analogue — same reasoning. The
+        # cancellation summary names the course and invoice number (per
+        # build_specialist_agent()'s CANCEL STEP 3 instructions).
+        c_m = _C_CODE_IN_TEXT.search(reply)
+        inv_m = _INVOICE_RE.search(reply)
+        slots = Slots(
+            course_code=c_m.group(1).upper() if c_m else None,
+            invoice_no=inv_m.group(0).upper() if inv_m else None,
+        )
+        log_dialogue_state(log, wid, PendingQuestion.CONFIRM_CANCEL, slots)
+        pending_result, slots_result = PendingQuestion.CONFIRM_CANCEL, slots
     elif _INTAKE_LIST_RE.search(reply):
         # Step 2's "here are the intake options, which would you like?" — a
         # numbered list of SH-codes, not just any single SH-code mention (a
         # status/invoice answer can legitimately mention one too). This is
         # the exact stage that had no recorded owner in the reported bug (a
         # numbered-list reply diverted to Module A instead of completing
-        # the enrolment already in progress here).
-        repo.set_conversation_state(wid, "B", "awaiting_intake_selection")
-    else:
-        # A status/invoice answer or a decline — nothing left open.
-        repo.clear_conversation_state_if_owner(wid, "B")
+        # the enrolment already in progress here). candidates records every
+        # SH-code the list actually offered, in the order shown, so a later
+        # phase can resolve "the second one" by indexing this tuple instead
+        # of re-parsing the numbered list out of the transcript.
+        c_m = _C_CODE_IN_TEXT.search(reply)
+        seen: dict[str, None] = {}
+        for code in _SH_CODE_IN_TEXT.findall(reply):
+            seen.setdefault(code.upper(), None)
+        slots = Slots(course_code=c_m.group(1).upper() if c_m else None, candidates=tuple(seen))
+        log_dialogue_state(log, wid, PendingQuestion.INTAKE_SELECTION, slots)
+        pending_result, slots_result = PendingQuestion.INTAKE_SELECTION, slots
+    # else: a status/invoice answer or a decline — nothing left open; NONE/empty stand.
 
-    return reply
+    return TurnResult(reply=reply, module="B", pending=pending_result, slots=slots_result)
 
 
 def _quick_enroll_from_text(body: str, customer: dict) -> str | None:
@@ -728,7 +764,7 @@ def _quick_enroll_from_text(body: str, customer: dict) -> str | None:
     return None
 
 
-def run(payload: dict, route: dict) -> str:
+def run(payload: dict, route: dict) -> TurnResult:
     # No registration-completeness check here by design: orchestrator.py
     # never dispatches to Module B until the participant's profile is
     # complete (Requirement 5 AC1, Requirement 2 AC4-AC8) — it owns the
@@ -738,24 +774,22 @@ def run(payload: dict, route: dict) -> str:
     # misclassify away from Module B.
     body     = (payload.get("message") or {}).get("body", "")
     customer = context.customer()
-    wid      = context.whatsapp_id()
 
     # Short-circuit: C-code + SH-code in free text → enroll directly, no LLM.
     quick = _quick_enroll_from_text(body, customer)
     if quick is not None:
         # Completes in one turn — nothing left pending (Requirement 3 AC12).
-        repo.clear_conversation_state_if_owner(wid, "B")
-        return quick
+        # TurnResult's default pending=NONE is exactly "clear" once
+        # orchestrator._dispatch() applies it.
+        return TurnResult(reply=quick, module="B")
 
     if not settings.openai_api_key:
         # Canned fallback, not a real stage — clear defensively rather than
         # leave a stale flow behind that a resumed conversation might not
         # actually still be in.
-        repo.clear_conversation_state_if_owner(wid, "B")
-        return _fallback_reply()
+        return TurnResult(reply=_fallback_reply(), module="B")
     try:
         return _run_agent(body)
     except Exception as e:  # noqa: BLE001
         log.error("Module B agent failed: %s", e)
-        repo.clear_conversation_state_if_owner(wid, "B")
-        return _fallback_reply()
+        return TurnResult(reply=_fallback_reply(), module="B")

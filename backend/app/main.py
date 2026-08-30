@@ -66,7 +66,12 @@ def health():
         database.query_one("SELECT 1 AS ok")
     except Exception:  # noqa: BLE001
         db_ok = False
-    return {"status": "ok", "db": db_ok, "openai_configured": bool(settings.openai_api_key)}
+    return {
+        "status": "ok",
+        "db": db_ok,
+        "db_provider": settings.db_provider,
+        "openai_configured": bool(settings.openai_api_key),
+    }
 
 
 @app.post("/webhook/whatsapp")

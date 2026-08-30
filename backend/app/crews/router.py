@@ -11,12 +11,72 @@ from __future__ import annotations
 
 import logging
 import re
+from dataclasses import dataclass, field
 
 from .. import context
 from .. import repositories as repo
 from ..config import settings
 
 log = logging.getLogger(__name__)
+
+
+# ── Routing trace (DIALOGUE_STATE_REDESIGN.md phase 0) ──────────────────────
+# Records HOW a routing decision was reached, not just its outcome. Purely
+# observational — nothing here influences control flow.
+#
+# Why this exists: Tier 0's sticky dispatch has always logged its decision via
+# log.info(), but the query trace file (backend/logs/) is written by
+# query_log.emit(). So the trace every debugging session actually reads showed
+# an identical "free text → Module B" whether the decision came from the
+# sticky dispatcher, the LLM classifier, or the no-API-key heuristic — three
+# very different paths, indistinguishable in the artefact used to tell them
+# apart. MEMORY_CONTEXT_REDESIGN.md grepped those logs for "Tier 0", found
+# nothing, and concluded the path might not run at all; it runs, it was just
+# never written there.
+#
+# Every later phase of the redesign is gated on measuring misroute rates from
+# these logs, so this has to land before any of them.
+@dataclass
+class RouteTrace:
+    """One turn's routing provenance. Rendered into the query log by
+    orchestrator._print_routing()."""
+
+    tier: str = ""                      # media | sticky | disambiguation | llm | heuristic
+    pending_module: str | None = None    # conversation_state as it was AT ENTRY,
+    pending_flow: str | None = None      # i.e. before this turn touched it
+    llm_label: str | None = None         # what the classifier actually returned,
+    llm_confidence: str | None = None    # before any deterministic override
+    overrides: list[str] = field(default_factory=list)
+    final: str = ""
+
+    def note_override(self, what: str, before: str, after: str) -> None:
+        self.overrides.append(f"{what} ({before} → {after})")
+
+    _TIER_LABELS = {
+        "media":          "media attachment → Module C, no model call",
+        "sticky":         "Tier 0 sticky dispatch (pending flow)",
+        "disambiguation": "Tier 0 disambiguation-menu reply",
+        "llm":            "Tier 1 LLM classifier",
+        "heuristic":      "Tier 1 heuristic fallback (no API key, or agent failed)",
+    }
+
+    def render(self) -> list[str]:
+        """Trace lines (unprefixed) describing this decision, most important
+        first. Only non-empty facts are emitted, so a simple turn stays short."""
+        lines = [f"tier       : {self._TIER_LABELS.get(self.tier, self.tier or '?')}"]
+        pending = (
+            f"{self.pending_module}/{self.pending_flow}"
+            if self.pending_module else "none (idle)"
+        )
+        lines.append(f"pending    : {pending}")
+        if self.llm_label:
+            conf = self.llm_confidence or "?"
+            lines.append(f"classifier : {self.llm_label} (confidence {conf})")
+        for o in self.overrides:
+            lines.append(f"override   : {o}")
+        if self.final:
+            lines.append(f"decision   : {self.final}")
+        return lines
 
 # Short replies that plausibly confirm/select a previously offered option
 # ("intake 2", "the second one", "go with that", a bare number, ...).
@@ -81,20 +141,62 @@ def _looks_like_payment_intent(body: str) -> bool:
     return bool(_PAYMENT_KEYWORD_RE.search(body))
 
 
-def _explicit_module_signal(body: str) -> str | None:
+def _restates_pending_course(body: str, state: dict | None) -> bool:
+    """True if EVERY course/schedule code named in `body` is already part of
+    the pending question — its course_code, schedule_code, or one of its
+    candidates (DIALOGUE_STATE_REDESIGN.md phase 1's flow_context, phase 3's
+    first real read of it for a routing decision, not just observational
+    logging) — i.e. the participant is restating or confirming what's
+    already open, not naming something new. False whenever there's no
+    flow_context to compare against (no pending flow, or a module that
+    hasn't started dual-writing it), which keeps the old blunt "any code at
+    all is a signal" behaviour as the fallback exactly where nothing better
+    is available yet.
+
+    Why this exists: _CODE_RE alone can't tell "C2601" meant as an answer
+    (repeating back the very course already under discussion) from "C2601"
+    meant as a genuine override — a bare course-code mention pending a
+    Module A reminder ask about that SAME course was, before this, being
+    read as an unconditional enrollment signal and forced out to Tier 1's
+    topic classifier every time, even though nothing about the turn had
+    actually changed topic."""
+    if not state:
+        return False
+    flow_context = state.get("flow_context") or {}
+    known = {c.upper() for c in (flow_context.get("candidates") or ()) if c}
+    for key in ("course_code", "schedule_code"):
+        val = flow_context.get(key)
+        if val:
+            known.add(val.upper())
+    if not known:
+        return False
+    mentioned = {c.upper() for c in _CODE_RE.findall(body or "")}
+    return bool(mentioned) and mentioned <= known
+
+
+def _explicit_module_signal(body: str, state: dict | None = None) -> str | None:
     """The module this message unambiguously states intent for, independent
     of any pending flow — None if it's ambiguous/context-dependent. Used
     only as Tier 0's override carve-out (_sticky_dispatch()): an explicit
     signal for a DIFFERENT module than the one currently pending still wins,
-    mirroring the precedent already established for AC5/AC7/AC8 below."""
-    if _has_explicit_enrollment_signal(body):
+    mirroring the precedent already established for AC5/AC7/AC8 below.
+
+    `state` (phase 3): the pending conversation_state row, if any — passed
+    through to _restates_pending_course() so a course/schedule code that
+    merely repeats what's already pending doesn't count as a signal on its
+    own. An enrollment KEYWORD ('enrol', 'sign up'...) is untouched by this
+    and always signals "B" regardless — restating a code and stating fresh
+    intent are different things."""
+    if _ENROLLMENT_KEYWORD_RE.search(body or ""):
+        return "B"
+    if _CODE_RE.search(body or "") and not _restates_pending_course(body, state):
         return "B"
     if _looks_like_payment_intent(body):
         return "C"
     return None
 
 
-__all__ = ["classify_free_text", "route", "DISAMBIGUATION_MENU"]
+__all__ = ["classify_free_text", "route", "DISAMBIGUATION_MENU", "RouteTrace"]
 
 # Requirement 3 AC13 — shown when classify_free_text() returns "DISAMBIGUATE"
 # (a genuinely low-confidence classification with no deterministic signal to
@@ -122,8 +224,57 @@ def _parse_disambiguation_reply(body: str) -> str | None:
     return None
 
 
+# DIALOGUE_STATE_REDESIGN.md phase 2.1 — a fixed, five-item vocabulary
+# summarising what the assistant's last turn DID, never its actual wording.
+# Deliberately narrow: this is not the same move as phase 2 reversed. Phase
+# 2's contamination problem was dense, unpredictable, dozens-of-tokens-long
+# free prose bleeding "enrol"/"payment"/"invoice"/"intake" into the
+# classifier at high, unpredictable token mass. This is one label from a
+# closed set, with no course names, fees, codes, or dates in it — measured
+# to matter: replaying 9 historical misroutes through the phase-2-only
+# classifier only fixed 5 (56%) — the 4 failures were all short, low-context
+# messages ("Ya, how about course 2") where the participant-only window
+# genuinely has nothing to ground "course 2" against once every assistant
+# signal is gone, so the model reasonably reads it as fresh enrollment
+# intent instead of a reference to a list it can no longer see happened.
+_ASSISTANT_ACTION_PATTERNS: list[tuple[re.Pattern, str]] = [
+    (re.compile(r"available courses|\[C\d{4}\]", re.IGNORECASE), "listed_courses"),
+    (re.compile(r"upcoming intakes|\[SH\d{4}\]", re.IGNORECASE), "showed_intake_options"),
+    (re.compile(r"shall i go ahead and (enrol|cancel)", re.IGNORECASE), "asked_to_confirm_enrolment_or_cancellation"),
+    (re.compile(r"which intake date should i remind", re.IGNORECASE), "asked_which_intake_for_reminder"),
+    (re.compile(r"invoice|paynow|skillsfuture claim", re.IGNORECASE), "discussed_payment_or_invoice"),
+]
+
+
+def _assistant_last_action(history: list[dict]) -> str:
+    """The fixed-vocabulary label for the most recent assistant turn, or
+    "none" if there wasn't one. Falls back to the generic "replied" when a
+    turn exists but matches none of the patterns above — never invents a
+    label outside the closed set, and never returns any of the turn's own
+    text."""
+    for turn in reversed(history):
+        if turn.get("role") == "assistant":
+            content = turn.get("content") or ""
+            for pattern, label in _ASSISTANT_ACTION_PATTERNS:
+                if pattern.search(content):
+                    return label
+            return "replied"
+    return "none"
+
+
 def _recent_history() -> list[dict]:
-    """Best-effort fetch of the last few chat turns for the current sender."""
+    """Best-effort fetch of the last few chat turns for the current sender,
+    scoped to their current episode (DIALOGUE_STATE_REDESIGN.md phase 2) —
+    a 60-minute idle gap starts a new one, so this can no longer silently
+    span across days the way a bare created_at-DESC LIMIT did.
+
+    Deliberately still BOTH roles, not participant-only: this return value
+    also feeds _last_assistant_offered_enrollment() and
+    _reminder_in_progress() below, which need real assistant turns to
+    check. Only classify_free_text()'s own LLM prompt strips assistant text
+    out of it — see that function's `participant_turns` for why (root cause
+    #1: the classifier's own window used to be overwhelmingly the bot
+    talking to itself)."""
     try:
         wid = context.whatsapp_id()
     except Exception:  # noqa: BLE001
@@ -131,7 +282,8 @@ def _recent_history() -> list[dict]:
     if not wid:
         return []
     try:
-        return repo.recent_memory(wid, limit=6)
+        session_id = repo.current_session_id(wid)
+        return repo.recent_memory(wid, limit=6, session_id=session_id)
     except Exception:  # noqa: BLE001
         return []
 
@@ -212,17 +364,45 @@ def _heuristic(body: str, history: list[dict] | None = None) -> str:
     return "A"
 
 
-def classify_free_text(body: str, has_media: bool) -> str:
-    """Classify free text into module A / B / C."""
+def classify_free_text(body: str, has_media: bool, trace: RouteTrace | None = None) -> str:
+    """Classify free text into module A / B / C.
+
+    `trace`, if given, is populated with how the decision was reached (phase 0
+    instrumentation) — observational only, never consulted for control flow.
+    Optional so the public signature stays backward-compatible."""
+    trace = trace if trace is not None else RouteTrace()
     if has_media:
+        trace.tier = "media"
         return "C"
     history = _recent_history()
     if not settings.openai_api_key:
+        trace.tier = "heuristic"
         return _heuristic(body, history)
     try:
         from ._base import kickoff_agent
 
-        convo = "\n".join(f"{h['role']}: {h['content']}" for h in history) or "(no prior messages)"
+        # DIALOGUE_STATE_REDESIGN.md phase 2 (root cause #1): participant
+        # turns only, not the assistant's own prior replies. By token mass
+        # the old mixed-role window was overwhelmingly the bot talking to
+        # itself, and that text is dense with "enrol"/"payment"/"invoice"/
+        # "intake" — exactly the tokens this 3-label classifier keys on
+        # (the distractor effect: topically-related-but-irrelevant content
+        # degrades classification far more than unrelated filler). Every
+        # deterministic override below that DOES need assistant text
+        # (_last_assistant_offered_enrollment, _reminder_in_progress) reads
+        # from `history` directly, untouched by this filter — only the LLM
+        # classifier's own visible context is narrowed.
+        participant_turns = [h["content"] for h in history if h.get("role") == "user"]
+        # phase 2.1: one fixed-label line ahead of the participant turns —
+        # see _assistant_last_action()'s own comment for why this exists and
+        # why it's a different, much lower-risk move than restoring the
+        # assistant's actual reply text.
+        convo_lines = [f"assistant_last_action: {_assistant_last_action(history)}"]
+        if participant_turns:
+            convo_lines += [f"participant: {c}" for c in participant_turns[-3:]]
+        else:
+            convo_lines.append("(no prior participant messages)")
+        convo = "\n".join(convo_lines)
         out = kickoff_agent(
             role="WhatsApp Intent Router",
             goal="Classify each inbound WhatsApp message into exactly one intent module.",
@@ -250,13 +430,30 @@ def classify_free_text(body: str, has_media: bool) -> str:
             ),
             tools=[],
             task_description=(
-                "Recent conversation with this participant (oldest first):\n"
+                "Context for this participant's conversation (their conversation partner's "
+                "actual replies are deliberately not shown to you in full — a separate "
+                "deterministic check elsewhere already verifies whether a specific course/intake "
+                "offer is genuinely pending). The first line, 'assistant_last_action', is the "
+                "ONLY thing you're told about what their conversation partner just did, "
+                "summarised as one fixed label — 'listed_courses' means a catalogue of courses "
+                "was just shown, so a bare reference like 'course 2' most likely names an item "
+                "from that list rather than stating fresh enrollment intent on its own; "
+                "'showed_intake_options' is the same idea for a list of intake dates; 'none' "
+                "means this is the opening message of the conversation. The remaining lines are "
+                "the participant's own recent messages, oldest first:\n"
                 f"{convo}\n\n"
                 f"Classify the participant's NEW message into exactly one label: "
                 f"ENQUIRY, ENROLLMENT, or PAYMENT.\n\n"
                 f"New message: \"{body}\"\n\n"
-                "If the assistant's last message offered course intakes or an enroll option and "
-                "this new message is selecting/confirming one, classify as ENROLLMENT.\n\n"
+                "A short reply with no topic of its own (e.g. 'yes', 'intake 2', 'the second "
+                "one', a bare number, 'how about course 2') only means ENROLLMENT if it's "
+                "plausibly confirming or selecting something a specific offer was made for — if "
+                "assistant_last_action is 'listed_courses' or 'none', or you otherwise cannot "
+                "tell what it would be confirming, this is almost always still just asking about "
+                "the catalogue (ENQUIRY), not committing to enrol; report LOW confidence instead "
+                "of guessing ENROLLMENT when genuinely unsure — a deterministic check elsewhere "
+                "resolves the true edge cases correctly using the full conversation, not just "
+                "what's shown here.\n\n"
                 "Also report your confidence: HIGH if the message clearly and unambiguously fits "
                 "one category, MEDIUM if it's a reasonable guess but could plausibly be read another "
                 "way, LOW if it's genuinely ambiguous or you're largely guessing.\n\n"
@@ -282,6 +479,12 @@ def classify_free_text(body: str, has_media: bool) -> str:
             module = "C"
         else:
             module = "A"
+        trace.tier = "llm"
+        # Truncated: an unparseable `out` falls back to the whole raw reply as
+        # `label`, which can be a paragraph — the trace wants the signal, not
+        # the essay.
+        trace.llm_label = label if label_m else f"UNPARSED:{label[:40]}"
+        trace.llm_confidence = confidence
         override_fired = False
 
         # Deterministic cross-check (Requirement 3 AC5): the LLM classifier
@@ -306,6 +509,7 @@ def classify_free_text(body: str, has_media: bool) -> str:
                 "Router: downgrading bare confirmation from ENROLLMENT to ENQUIRY "
                 "(no prior specific course/intake offer): %r", body,
             )
+            trace.note_override("bare confirmation, no prior offer", module, "A")
             module = "A"
             override_fired = True
 
@@ -349,6 +553,7 @@ def classify_free_text(body: str, has_media: bool) -> str:
                 "Router: overriding %s to ENQUIRY (reminder exchange in progress): %r",
                 module, body,
             )
+            trace.note_override("reminder exchange in progress", module, "A")
             module = "A"
             override_fired = True
 
@@ -366,15 +571,18 @@ def classify_free_text(body: str, has_media: bool) -> str:
                 "Router: low-confidence classification (label=%s) — disambiguating: %r",
                 label, body,
             )
+            trace.note_override("low confidence, unresolved", module, "DISAMBIGUATE")
             return "DISAMBIGUATE"
 
         return module
     except Exception as e:  # noqa: BLE001
         log.warning("router agent failed, using heuristic: %s", e)
+        trace.tier = "heuristic"
+        trace.note_override("classifier raised", type(e).__name__, "heuristic")
         return _heuristic(body, history)
 
 
-def _sticky_dispatch(body: str) -> str | None:
+def _sticky_dispatch(body: str, trace: RouteTrace | None = None) -> str | None:
     """Tier 0 (Requirement 3 AC10-AC12): if this participant has an
     unexpired pending flow recorded by whichever module last left a
     question open (Module A's reminder stage, Module B's intake-selection/
@@ -393,6 +601,7 @@ def _sticky_dispatch(body: str) -> str | None:
     design_qm.md Component 3 (v1.26) for the full incident this was built
     from (a numbered intake-list reply diverted to Module A because an
     older, already-resolved reminder confirmation still said "remind")."""
+    trace = trace if trace is not None else RouteTrace()
     try:
         wid = context.whatsapp_id()
     except Exception:  # noqa: BLE001
@@ -403,10 +612,16 @@ def _sticky_dispatch(body: str) -> str | None:
         state = repo.get_conversation_state(wid)
     except Exception as e:  # noqa: BLE001
         log.warning("conversation_state lookup failed, skipping Tier 0: %s", e)
+        trace.note_override("conversation_state lookup failed", type(e).__name__, "Tier 1")
         return None
     if not state:
         return None
     owner = state["active_module"]
+    # Recorded even when Tier 0 goes on to decline the turn below — "there WAS
+    # a pending flow and it was overridden" is exactly the distinction the old
+    # trace could not make.
+    trace.pending_module = owner
+    trace.pending_flow = state.get("active_flow")
 
     # Requirement 3 AC13: "ROUTER" isn't a real module — it means the last
     # turn was a disambiguation menu (classify_free_text() returned
@@ -420,17 +635,36 @@ def _sticky_dispatch(body: str) -> str | None:
         resolved = _parse_disambiguation_reply(body or "")
         if resolved:
             log.info("Router: disambiguation resolved to %s: %r", resolved, body)
+            trace.tier = "disambiguation"
             return resolved
+        trace.note_override("disambiguation reply unparseable", "ROUTER", "Tier 1")
         return None
 
-    override = _explicit_module_signal(body or "")
+    override = _explicit_module_signal(body or "", state)
     if override and override != owner:
+        trace.note_override("explicit signal beats pending flow", owner, override)
         return None
     log.info(
         "Router: Tier 0 sticky dispatch to %s (flow=%s): %r",
         owner, state.get("active_flow"), body,
     )
+    trace.tier = "sticky"
     return owner
+
+
+def _record_pending(trace: RouteTrace) -> None:
+    """Fill trace.pending_* on a path that never reaches _sticky_dispatch()
+    (currently only the media short-circuit), so the trace can still show that
+    a flow was open when the money path preempted it. Best-effort: a trace
+    detail must never be able to break routing."""
+    try:
+        wid = context.whatsapp_id()
+        state = repo.get_conversation_state(wid) if wid else None
+    except Exception:  # noqa: BLE001
+        return
+    if state:
+        trace.pending_module = state.get("active_module")
+        trace.pending_flow = state.get("active_flow")
 
 
 def route(payload: dict) -> dict:
@@ -440,16 +674,27 @@ def route(payload: dict) -> dict:
     is classified as free text. An image attachment still routes straight to
     Module C without a model call (Requirement 3 AC2); everything else tries
     Tier 0 sticky dispatch first, then falls back to classify_free_text().
+
+    The returned dict carries a "trace" (RouteTrace) recording HOW the decision
+    was reached — see RouteTrace's own comment. Purely additive: no module
+    reads the route dict, and orchestrator.py only ever read "module".
     """
     body     = (payload.get("message") or {}).get("body", "")
     has_media = bool(payload.get("media"))
+    trace = RouteTrace()
 
     if has_media:
         module = "C"
+        trace.tier = "media"
+        _record_pending(trace)
     else:
-        module = _sticky_dispatch(body) or classify_free_text(body, has_media)
+        # One trace object through BOTH tiers — a Tier 0 miss must still leave
+        # its pending-flow reading visible on the Tier 1 decision that follows.
+        module = _sticky_dispatch(body, trace) or classify_free_text(body, has_media, trace)
+    trace.final = module
     return {
         "module":    module,
         "arg":       body,
         "has_media": has_media,
+        "trace":     trace,
     }

@@ -21,7 +21,14 @@ class Settings(BaseSettings):
     openai_temperature: float = 0.2
 
     # ── Database ────────────────────────────────────────────────────────────
-    database_url: str = "postgresql://qm_user:qm_password@localhost:5432/qm_enrollment"
+    # DB_PROVIDER picks which DATABASE_URL_* below is actually used ("docker"
+    # or "supabase"). DATABASE_URL, if set, wins outright over DB_PROVIDER —
+    # kept for back-compat with .env files predating this split and for
+    # one-off overrides (e.g. CI pointing at a throwaway database).
+    db_provider: str = "docker"
+    database_url_docker: str = "postgresql://qm_user:qm_password@localhost:5432/qm_enrollment"
+    database_url_supabase: str = ""
+    database_url: str = ""
 
     # ── Backend server ──────────────────────────────────────────────────────
     backend_host: str = "0.0.0.0"
@@ -56,7 +63,11 @@ class Settings(BaseSettings):
     auto_confirm_threshold: float = 0.80
 
     # ── Scheduler ───────────────────────────────────────────────────────────
-    scheduler_enabled: bool = True
+    scheduler_enabled: bool = True  # master switch — false disables every job below
+    scheduler_followups_enabled: bool = True
+    scheduler_nightly_report_enabled: bool = True
+    scheduler_reminder_dispatch_enabled: bool = True
+    scheduler_credit_note_dispatch_enabled: bool = True
     followup_check_cron_hour: int = 9
     nightly_report_cron_hour: int = 20
     reminder_dispatch_cron_hour: int = 8  # Requirement 10 AC5
@@ -69,6 +80,24 @@ class Settings(BaseSettings):
     # console. Set false to disable file writes entirely (console trace is
     # unaffected).
     query_log_enabled: bool = True
+
+    @property
+    def resolved_database_url(self) -> str:
+        """The Postgres connection string actually used to connect.
+
+        DATABASE_URL wins outright when set. Otherwise DB_PROVIDER selects
+        between DATABASE_URL_DOCKER and DATABASE_URL_SUPABASE.
+        """
+        if self.database_url:
+            return self.database_url
+        if self.db_provider.strip().lower() == "supabase":
+            if not self.database_url_supabase:
+                raise RuntimeError(
+                    "DB_PROVIDER=supabase but DATABASE_URL_SUPABASE is not set "
+                    "in backend/.env"
+                )
+            return self.database_url_supabase
+        return self.database_url_docker
 
     @property
     def generated_dir(self) -> Path:
